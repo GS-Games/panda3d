@@ -1,16 +1,17 @@
 language: cpp
 sudo: false
-matrix:
-  include:
-    - compiler: clang
-      env: PYTHONV=python3 FLAGS=--installer
-    - compiler: clang
-      env: PYTHONV=python2.7 FLAGS=--override=STDFLOAT_DOUBLE=1
-    - compiler: gcc
-      env: PYTHONV=python2.7 FLAGS=--optimize=4
-      before_install:
-        - export CC=gcc-4.7
-        - export CXX=g++-4.7
+
+# Build matrix:
+compiler:
+- gcc
+- clang
+env:
+- BUILD_METALIBS=OFF COMPOSITE_SOURCE_LIMIT=0
+- BUILD_METALIBS=ON COMPOSITE_SOURCE_LIMIT=0
+- BUILD_METALIBS=OFF COMPOSITE_SOURCE_LIMIT=30
+- BUILD_METALIBS=ON COMPOSITE_SOURCE_LIMIT=30
+- BUILD_METALIBS=ON COMPOSITE_SOURCE_LIMIT=30 PYTHON_INTERP=python2.7
+
 addons:
   apt:
     sources:
@@ -20,6 +21,10 @@ addons:
     - g++-4.7
     - bison
     - flex
+    - libavcodec-dev
+    - libavformat-dev
+    - libavresample-dev
+    - libavutil-dev
     - libfreetype6-dev
     - libgl1-mesa-dev
     - libjpeg-dev
@@ -27,6 +32,7 @@ addons:
     - libopenal-dev
     - libpng-dev
     - libssl-dev
+    - libswscale-dev
     - libvorbis-dev
     - libx11-dev
     - libxcursor-dev
@@ -37,17 +43,32 @@ addons:
     - python-virtualenv
     - zlib1g-dev
     - fakeroot
+
+before_install:
+# clean up remnants of makepanda
+- mv makepanda/test_imports.py .
+- makepanda/selfdestruct.py --yes
+
 install:
-    - virtualenv --python=$PYTHONV venv && source venv/bin/activate
-    - $PYTHONV -m pip install pytest
+- virtualenv --python=${PYTHON_INTERP:-python3.4} venv && source venv/bin/activate
+- pip install pytest
+
+before_script:
+- mkdir built
+- cd built
+
 script:
-    - $PYTHONV makepanda/makepanda.py --everything --git-commit $TRAVIS_COMMIT $FLAGS --threads 4
-    - LD_LIBRARY_PATH=built/lib PYTHONPATH=built $PYTHONV makepanda/test_imports.py
-    - LD_LIBRARY_PATH=built/lib PYTHONPATH=built $PYTHONV -m pytest tests
+- cmake -DHAVE_GTK2=NO -DBUILD_METALIBS=$BUILD_METALIBS -DCOMPOSITE_SOURCE_LIMIT=$COMPOSITE_SOURCE_LIMIT .. 
+- make -j4
+
+- export PYTHONPATH=$PWD
+- python ../test_imports.py
+- pytest ../tests
+
 notifications:
   irc:
     channels:
-      - "chat.freenode.net#panda3d"
+    - "chat.freenode.net#panda3d"
     on_success: change
     on_failure: always
     use_notice: true

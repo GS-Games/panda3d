@@ -1,0 +1,79 @@
+set(P3INTERROGATEDB_HEADERS
+  config_interrogatedb.h indexRemapper.h interrogateComponent.I
+  interrogateComponent.h interrogateDatabase.I
+  interrogateDatabase.h interrogateElement.I
+  interrogateElement.h interrogateFunction.I
+  interrogateFunction.h interrogateFunctionWrapper.I
+  interrogateFunctionWrapper.h
+  interrogateMakeSeq.I interrogateMakeSeq.h
+  interrogateManifest.I interrogateManifest.h
+  interrogateType.I interrogateType.h
+  interrogate_datafile.I interrogate_datafile.h
+  interrogate_interface.h interrogate_request.h
+  extension.h py_compat.h py_panda.h py_wrappers.h)
+
+set(P3INTERROGATEDB_SOURCES
+  config_interrogatedb.cxx
+  dtool_super_base.cxx
+  indexRemapper.cxx
+  interrogateComponent.cxx interrogateDatabase.cxx
+  interrogateElement.cxx interrogateFunction.cxx
+  interrogateFunctionWrapper.cxx
+  interrogateMakeSeq.cxx
+  interrogateManifest.cxx
+  interrogateType.cxx interrogate_datafile.cxx
+  interrogate_interface.cxx interrogate_request.cxx
+  py_compat.cxx
+  py_panda.cxx
+  py_wrappers.cxx)
+
+set(P3INTERROGATEDB_IGATE
+  interrogate_interface.h
+  interrogate_request.h
+)
+
+composite_sources(p3interrogatedb P3INTERROGATEDB_SOURCES)
+
+add_component_library(p3interrogatedb NOINIT SYMBOL BUILDING_INTERROGATEDB
+  ${P3INTERROGATEDB_HEADERS} ${P3INTERROGATEDB_SOURCES})
+target_link_libraries(p3interrogatedb p3dconfig)
+target_use_packages(p3interrogatedb PYTHON)
+
+install(TARGETS p3interrogatedb DESTINATION lib)
+install(FILES ${P3INTERROGATEDB_HEADERS} DESTINATION include/panda3d)
+
+# ALSO: This has an Interrogate binding! Take care of that if we want it.
+# Note we don't use the regular Interrogate macros; this has some custom flags
+# that would make it not worthwhile.
+
+if(NOT HAVE_PYTHON OR NOT INTERROGATE_PYTHON_INTERFACE)
+  return()
+endif()
+
+add_custom_command(
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/interrogatedb_module.cxx"
+  COMMAND interrogate
+    -D EXPCL_INTERROGATEDB=
+    -nodb -python -promiscuous
+    -module panda3d.interrogatedb
+    -library interrogatedb
+    -string -true-names -do-module
+    -srcdir "${CMAKE_CURRENT_SOURCE_DIR}"
+    -oc "${CMAKE_CURRENT_BINARY_DIR}/interrogatedb_module.cxx"
+    ${P3INTERROGATEDB_IGATE}
+  DEPENDS interrogate ${P3INTERROGATEDB_IGATE}
+  COMMENT "Interrogating interrogatedb"
+)
+
+add_library(interrogatedb ${MODULE_TYPE}
+  "${CMAKE_CURRENT_BINARY_DIR}/interrogatedb_module.cxx")
+target_use_packages(interrogatedb PYTHON)
+target_link_libraries(interrogatedb p3dtoolconfig)
+
+set_target_properties(interrogatedb PROPERTIES
+  LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/panda3d"
+  PREFIX ""
+  OUTPUT_NAME "interrogatedb"
+)
+
+install(TARGETS interrogatedb DESTINATION "${PYTHON_ARCH_INSTALL_DIR}/panda3d")
