@@ -102,10 +102,12 @@ set(P3EGG_PARSER_SOURCES
   lexer.cxx)
 
 composite_sources(p3egg P3EGG_SOURCES)
-add_component_library(p3egg SYMBOL BUILDING_PANDAEGG
+add_component_library(p3egg SYMBOL BUILDING_PANDA_EGG
   ${P3EGG_HEADERS} ${P3EGG_SOURCES} ${P3EGG_PARSER_SOURCES})
 target_link_libraries(p3egg panda)
 target_interrogate(p3egg ${P3EGG_HEADERS} ${P3EGG_SOURCES} EXTENSIONS ${P3EGG_IGATEEXT})
 
-install(TARGETS p3egg DESTINATION lib)
+if(NOT BUILD_METALIBS)
+  install(TARGETS p3egg DESTINATION lib RUNTIME DESTINATION bin)
+endif()
 install(FILES ${P3EGG_HEADERS} DESTINATION include/panda3d)

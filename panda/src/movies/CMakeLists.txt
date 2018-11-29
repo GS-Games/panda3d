@@ -1,4 +1,5 @@
 set(P3MOVIES_HEADERS
+    dr_flac.h
     config_movies.h
     flacAudio.h flacAudio.I
     flacAudioCursor.h flacAudioCursor.I
@@ -44,8 +45,10 @@ set(P3MOVIES_SOURCES
 composite_sources(p3movies P3MOVIES_SOURCES)
 add_component_library(p3movies SYMBOL BUILDING_PANDA_MOVIES
   ${P3MOVIES_HEADERS} ${P3MOVIES_SOURCES})
-target_link_libraries(p3movies p3pstatclient p3gobj p3express p3pandabase)
+target_link_libraries(p3movies p3pstatclient p3gobj p3pandabase pandaexpress)
 target_interrogate(p3movies ALL)
 
-install(TARGETS p3movies DESTINATION lib)
+if(NOT BUILD_METALIBS)
+  install(TARGETS p3movies DESTINATION lib RUNTIME DESTINATION bin)
+endif()
 install(FILES ${P3MOVIES_HEADERS} DESTINATION include/panda3d)

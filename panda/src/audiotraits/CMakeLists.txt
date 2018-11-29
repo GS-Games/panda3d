@@ -21,13 +21,11 @@ if(HAVE_RAD_MSS)
       milesAudioSequence.cxx)
 
   composite_sources(p3miles_audio P3MILES_SOURCES)
-  include_directories(${MILES_INCLUDE_DIR})
   add_library(p3miles_audio ${P3MILES_HEADERS} ${P3MILES_SOURCES})
   set_target_properties(p3miles_audio PROPERTIES DEFINE_SYMBOL BUILDING_MILES_AUDIO)
-  target_link_libraries(p3miles_audio panda)
-  target_use_packages(p3miles_audio MILES)
+  target_link_libraries(p3miles_audio panda PKG::MILES)
 
-  install(TARGETS p3miles_audio DESTINATION lib)
+  install(TARGETS p3miles_audio DESTINATION lib RUNTIME DESTINATION bin)
 endif()
 
 if(HAVE_FMODEX)
@@ -40,13 +38,11 @@ if(HAVE_FMODEX)
       config_fmodAudio.cxx fmodAudioManager.cxx fmodAudioSound.cxx)
 
   composite_sources(p3fmod_audio P3FMOD_SOURCES)
-  include_directories(${FMODEX_INCLUDE_DIR})
   add_library(p3fmod_audio ${P3FMOD_HEADERS} ${P3FMOD_SOURCES})
   set_target_properties(p3fmod_audio PROPERTIES DEFINE_SYMBOL BUILDING_FMOD_AUDIO)
-  target_link_libraries(p3fmod_audio panda)
-  target_use_packages(p3fmod_audio FMODEX)
+  target_link_libraries(p3fmod_audio panda PKG::FMODEX)
 
-  install(TARGETS p3fmod_audio DESTINATION lib)
+  install(TARGETS p3fmod_audio DESTINATION lib RUNTIME DESTINATION bin)
 endif()
 
 if(HAVE_OPENAL)
@@ -60,11 +56,9 @@ if(HAVE_OPENAL)
 
 
   composite_sources(p3openal_audio P3OPENAL_SOURCES)
-  include_directories(${OPENAL_INCLUDE_DIR})
   add_library(p3openal_audio ${P3OPENAL_HEADERS} ${P3OPENAL_SOURCES})
   set_target_properties(p3openal_audio PROPERTIES DEFINE_SYMBOL BUILDING_OPENAL_AUDIO)
-  target_link_libraries(p3openal_audio panda)
-  target_use_packages(p3openal_audio OPENAL)
+  target_link_libraries(p3openal_audio panda PKG::OPENAL)
 
-  install(TARGETS p3openal_audio DESTINATION lib)
+  install(TARGETS p3openal_audio DESTINATION lib RUNTIME DESTINATION bin)
 endif()

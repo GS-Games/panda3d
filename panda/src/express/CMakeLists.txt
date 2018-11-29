@@ -49,10 +49,12 @@ set(P3EXPRESS_HEADERS
   threadSafePointerToBase.I threadSafePointerToBase.h
   trueClock.I trueClock.h
   typedReferenceCount.I typedReferenceCount.h typedef.h
-  virtualFile.I virtualFileList.I virtualFileList.h virtualFileMount.h
-  virtualFileComposite.h virtualFileComposite.I virtualFile.h
-  virtualFileMount.I virtualFileMountMultifile.h
-  virtualFileMountMultifile.I
+  virtualFileList.I virtualFileList.h
+  virtualFileComposite.h virtualFileComposite.I
+  virtualFile.h virtualFile.I
+  virtualFileMount.h virtualFileMount.I
+  virtualFileMountAndroidAsset.h virtualFileMountAndroidAsset.I
+  virtualFileMountMultifile.h virtualFileMountMultifile.I
   virtualFileMountRamdisk.h virtualFileMountRamdisk.I
   virtualFileMountSystem.h virtualFileMountSystem.I
   virtualFileSimple.h virtualFileSimple.I
@@ -118,24 +120,13 @@ set(P3EXPRESS_SOURCES
   windowsRegistry.cxx
   zStream.cxx zStreamBuf.cxx)
 
-# Some of these reside in dtoolbase/dtoolutil. But dtool isn't run through
-# Interrogate; Panda is. So we're responsible for providing the extensions.
 set(P3EXPRESS_IGATEEXT
-  ../../../dtool/src/dtoolutil/filename_ext.cxx
-  ../../../dtool/src/dtoolutil/filename_ext.h
-  ../../../dtool/src/dtoolutil/globPattern_ext.cxx
-  ../../../dtool/src/dtoolutil/globPattern_ext.h
+  datagram_ext.h
   memoryUsagePointers_ext.cxx
   memoryUsagePointers_ext.h
   pointerToArray_ext.h
   ramfile_ext.cxx
   ramfile_ext.h
-  ../../../dtool/src/prc/streamReader_ext.cxx
-  ../../../dtool/src/prc/streamReader_ext.h
-  ../../../dtool/src/prc/streamWriter_ext.cxx
-  ../../../dtool/src/prc/streamWriter_ext.h
-  ../../../dtool/src/dtoolbase/typeHandle_ext.cxx
-  ../../../dtool/src/dtoolbase/typeHandle_ext.h
   virtualFileSystem_ext.cxx
   virtualFileSystem_ext.h
   virtualFile_ext.cxx
@@ -146,18 +137,17 @@ composite_sources(p3express P3EXPRESS_SOURCES)
 add_component_library(p3express SYMBOL BUILDING_PANDA_EXPRESS
   ${P3EXPRESS_SOURCES} ${P3EXPRESS_HEADERS})
 
-# p3express needs to include from p3interrogatedb for py_panda.h and extension.h
-target_include_directories(p3express PUBLIC
-  $<TARGET_PROPERTY:p3interrogatedb,INTERFACE_INCLUDE_DIRECTORIES>)
-target_link_libraries(p3express p3pandabase p3dtoolconfig p3dtool)
-target_use_packages(p3express TAR ZLIB)
+target_link_libraries(p3express p3pandabase p3dtoolconfig p3dtool
+  PKG::TAR PKG::ZLIB PKG::OPENSSL)
 target_interrogate(p3express ALL EXTENSIONS ${P3EXPRESS_IGATEEXT})
 
 if(WIN32)
   target_link_libraries(p3express advapi32.lib ws2_32.lib)
 endif()
 
-install(TARGETS p3express DESTINATION lib)
+if(NOT BUILD_METALIBS)
+  install(TARGETS p3express DESTINATION lib RUNTIME DESTINATION bin)
+endif()
 install(FILES ${P3EXPRESS_HEADERS} DESTINATION include/panda3d)
 
 #add_executable(p3expressTestTypes test_types.cxx)

@@ -6,6 +6,8 @@
 # generate build scripts appropriate to each environment.
 #
 
+include(CMakeDependentOption)
+
 # Define the plaform we are building on.
 # The values "UNIX", "WIN32", "MINGW", "MSYS", and "CYGWIN"
 # are automatically provided by CMAKE.  "APPLE" is also provided by
@@ -255,11 +257,17 @@ mark_as_advanced(HAVE_P3D_RTDIST PANDA_PACKAGE_VERSION PANDA_PACKAGE_HOST)
 # The following options relate to interrogate, the tool that is
 # used to generate bindings for non-C++ languages.
 
-option(INTERROGATE_PYTHON_INTERFACE
+option(WANT_INTERROGATE
+  "Do you want to include Interrogate in the installation? This
+program reads C++ source files and generates bindings for another
+language.  If you won't be building interfaces for other languages,
+you don't need the program." ON)
+
+cmake_dependent_option(INTERROGATE_PYTHON_INTERFACE
   "Do you want to generate a Python-callable interrogate interface?
 This is only necessary if you plan to make calls into Panda from a
 program written in Python.  This is done only if HAVE_PYTHON is also
-true." ON)
+true." ON "HAVE_PYTHON" OFF)
 
 set(INTERROGATE_C_INTERFACE
   "Do you want to generate a C-callable interrogate interface?  This
@@ -267,12 +275,6 @@ generates an interface similar to the Python interface above, with
 a C calling convention.  It should be useful for most other kinds
 of scripting language; the VR Studio used to use this to make calls
 into Panda from Squeak." OFF)
-
-option(HAVE_INTERROGATE
-  "Do you even want to build interrogate at all?  This is the program
-that reads our C++ source files and generates one of the above
-interfaces.  If you won't be building the interfaces, you don't
-need the program." ON)
 
 set(INTERROGATE_OPTIONS "-fnames;-string;-refcount;-assert" CACHE STRING
   "What additional options should be passed to interrogate when
@@ -283,21 +285,7 @@ option(INTERROGATE_VERBOSE
   "Set this if you would like interrogate to generate advanced
 debugging information." OFF)
 
-set(INTERROGATE "interrogate" CACHE STRING
-  "What's the name of the interrogate binary to run?  The default
-specified is the one that is built as part of DTOOL.  If you have a
-prebuilt binary standing by (for instance, if you are cross-compiling
-and cannot run the built version), specify its name instead.")
-
-set(INTERROGATE_MODULE "interrogate_module" CACHE STRING
-  "Same as INTERROGATE, except for the interrogate_module binary.")
-
 mark_as_advanced(INTERROGATE_OPTIONS)
-
-if(NOT CMAKE_CROSSCOMPILING)
-  mark_as_advanced(INTERROGATE INTERROGATE_MODULE)
-endif()
-
 
 #
 # The following options have to do with the memory allocation system
@@ -417,46 +405,6 @@ mark_as_advanced(ANDROID_NDK_HOME ANDROID_ABI ANDROID_STL
 # Now let's check for the presence of various thirdparty libraries.
 #
 
-# Is Python installed, and should Python interfaces be generated?
-set(WANT_PYTHON_VERSION ""
-  CACHE STRING "Which Python version to seek out for building Panda3D against.")
-
-find_package(PythonInterp ${WANT_PYTHON_VERSION} QUIET)
-find_package(PythonLibs ${PYTHON_VERSION_STRING} QUIET)
-if(PYTHONINTERP_FOUND AND PYTHONLIBS_FOUND)
-  set(PYTHON_FOUND ON)
-else()
-  set(PYTHON_FOUND OFF)
-endif()
-
-package_option(PYTHON DEFAULT ON
-  "Enables support for Python.  If INTERROGATE_PYTHON_INTERFACE
-is also enabled, Python bindings will be generated.")
-
-# Also detect the optimal install paths:
-if(HAVE_PYTHON)
-  execute_process(
-    COMMAND ${PYTHON_EXECUTABLE}
-      -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(False))"
-      OUTPUT_VARIABLE _LIB_DIR
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-  execute_process(
-    COMMAND ${PYTHON_EXECUTABLE}
-      -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(True))"
-      OUTPUT_VARIABLE _ARCH_DIR
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-  set(PYTHON_LIB_INSTALL_DIR "${_LIB_DIR}" CACHE STRING
-    "Path to the Python architecture-independent package directory.")
-
-  set(PYTHON_ARCH_INSTALL_DIR "${_ARCH_DIR}" CACHE STRING
-    "Path to the Python architecture-dependent package directory.")
-
-  # Always include Python, because we include it pretty much everywhere
-  # though we don't usually want to link it in as well.
-  include_directories(${PYTHON_INCLUDE_DIRS})
-endif()
-
 
 # By default, we'll assume the user only wants to run with Debug
 # python if he has to--that is, on Windows when building a debug build.
@@ -470,11 +418,6 @@ endif()
 option(HAVE_VIDEO4LINUX
   "Set this to enable webcam support on Linux." ${IS_LINUX})
 
-
-# Is OpenGL installed, and where?
-find_package(OpenGL QUIET)
-set(GL_FOUND ${OPENGL_FOUND})
-package_option(GL "Enable OpenGL support.")
 
 # If you are having trouble linking in OpenGL extension functions at
 # runtime for some reason, you can set this variable. It also,
@@ -499,26 +442,6 @@ that is built into Panda. TinyDisplay is not as full-featured as Mesa
 but is many times faster." ${IS_NOT_MINSIZE_BUILD})
 
 
-# TODO: OpenGL ES
-# Is OpenGL ES 1.x installed, and where?
-#find_package(OpenGLES)
-
-#package_option(GLES
-#  "Enable OpenGL ES 1.x support, a minimal subset of
-#OpenGL for mobile devices.")
-
-# Is OpenGL ES 2.x installed, and where?
-#find_package(OpenGLES)
-
-#package_option(GLES2
-#  "Enable OpenGL ES 2.x support, a version of OpenGL ES but without
-#fixed-function pipeline - everything is programmable there.")
-
-# Is EGL installed, and where?
-#package_option(EGL
-#  "Enable EGL support. EGL is like GLX, but for OpenGL ES.")
-
-
 # Is SDL installed, and where?
 set(Threads_FIND_QUIETLY TRUE) # Fix for builtin FindSDL
 set(Eigen3_FIND_QUIETLY TRUE) # Fix for builtin FindSDL
@@ -539,40 +462,7 @@ mark_as_advanced(SDL_LIBRARY)
 mark_as_advanced(SDL_LIBRARY_TEMP)
 
 
-# Is X11 insalled, and where?
-find_package(X11 QUIET)
-
-package_option(X11
-  "Provides X-server support on Unix platforms. X11 may need to be linked
-against for tinydisplay, but probably only on a Linux platform.")
-if(NOT UNIX AND HAVE_X11)
-  message(SEND_ERROR
-    "X11 support is only supported on Unix platforms:
-ie. Linux, BSD, OS X, Cygwin, etc...")
-endif()
-
-
-# TODO: XF86DGA
-# This defines if we have XF86DGA installed.
-#find_package(XF86DGA QUIET)
-
-#package_option(XF86DGA
-#  "This enables smooth FPS-style mouse in x11display,
-#when mouse mode M_relative is used.")
-
-
-# TODO: XRANDR
-#find_package(Xrandr QUIET)
-#package_option(XRANDR
-#  "This enables resolution switching in x11display.")
-
-
-# TODO: XCURSOR
-#find_package(Xcursor QUIET)
-#package_option(XCURSOR
-#  "This enables custom cursor support in x11display.")
-
-if(HAVE_GL AND HAVE_X11)
+if(HAVE_GL AND HAVE_X11 AND NOT APPLE)
   option(HAVE_GLX "Enables GLX. Requires OpenGL and X11." ON)
 else()
   option(HAVE_GLX "Enables GLX. Requires OpenGL and X11." OFF)
@@ -589,22 +479,10 @@ else()
   option(HAVE_WGL "Enable WGL.  Requires OpenGL on Windows." OFF)
 endif()
 
-if(IS_OSX)
-  option(HAVE_COCOA "Enable Cocoa. Requires Mac OS X." ON)
-  option(HAVE_CARBON "Enable Carbon. Requires Mac OS X." ON)
-else()
-  option(HAVE_COCOA "Enable Cocoa. Requires Mac OS X." OFF)
-  option(HAVE_CARBON "Enable Carbon. Requires Mac OS X." OFF)
-endif()
-
-#
-# <<<<<< Insert the rest of the Config.pp
-#        port of third-party libs here <<<<<<<
-#
-
-
-
-
+cmake_dependent_option(HAVE_COCOA "Enable Cocoa. Requires Mac OS X." ON
+  "APPLE" OFF)
+cmake_dependent_option(HAVE_CARBON "Enable Carbon. Requires Mac OS X." OFF
+  "APPLE" OFF)
 
 #
 # Miscellaneous settings
@@ -655,16 +533,6 @@ mark_as_advanced(HAVE_SGI_RGB HAVE_TGA
   HAVE_IMG HAVE_SOFTIMAGE_PIC HAVE_BMP HAVE_PNM)
 
 
-#
-# <<<<< Insert the rest of the Config.pp
-#       port of miscellaneous settings here <<<<<
-#
-
-
-
-
-
-
 # How to invoke bison and flex.  Panda takes advantage of some
 # bison/flex features, and therefore specifically requires bison and
 # flex, not some other versions of yacc and lex.  However, you only
@@ -683,50 +551,25 @@ set(HAVE_BISON ${BISON_FOUND})
 set(HAVE_FLEX ${FLEX_FOUND})
 
 
-#
-# >>>>> Below is entirely temporary config information
-#       until the port of Config.pp is finished.
-#       It should be re-arranged for above. >>>>>>
-#
-
 ### Configure threading support ###
+set(CMAKE_THREAD_PREFER_PTHREAD ON)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads QUIET)
 
-# Add basic use flag for threading
-if(THREADS_FOUND)
-  option(HAVE_THREADS
-    "If on, compile Panda3D with threading support.
-Building in support for threading will enable Panda to take
-advantage of multiple CPU's if you have them (and if the OS
-supports kernel threads running on different CPU's), but it will
-slightly slow down Panda for the single CPU case." ON)
-else()
-  option(HAVE_THREADS
-    "If on, compile Panda3D with threading support.
-Building in support for threading will enable Panda to take
-advantage of multiple CPU's if you have them (and if the OS
-supports kernel threads running on different CPU's), but it will
-slightly slow down Panda for the single CPU case." OFF)
-endif()
+set(THREADS_LIBRARIES "${CMAKE_THREAD_LIBS_INIT}")
+set(HAVE_POSIX_THREADS ${CMAKE_USE_PTHREADS_INIT})
 
+# Add basic use flag for threading
+package_option(THREADS
+  "If on, compile Panda3D with threading support.
+Building in support for threading will enable Panda to take
+advantage of multiple CPU's if you have them (and if the OS
+supports kernel threads running on different CPU's), but it will
+slightly slow down Panda for the single CPU case."
+  IMPORTED_AS Threads::Threads)
 
 # Configure debug threads
-if(CMAKE_BUILD_TYPE MATCHES "Debug")
-  option(DEBUG_THREADS "If on, enables debugging of thread and sync operations (i.e. mutexes, deadlocks)" ON)
-else()
-  option(DEBUG_THREADS "If on, enables debugging of thread and sync operations (i.e. mutexes, deadlocks)" OFF)
-endif()
-
-if(HAVE_THREADS)
-  set(HAVE_POSIX_THREADS ${CMAKE_USE_PTHREADS_INIT})
-  if(HAVE_POSIX_THREADS)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -pthread")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -pthread")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -pthread")
-    set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} -pthread")
-  endif()
-endif()
+option(DEBUG_THREADS "If on, enables debugging of thread and sync operations (i.e. mutexes, deadlocks)" ${IS_DEBUG_BUILD})
 
 option(SIMPLE_THREADS
   "If on, compile with simulated threads.  Threads, by default, use

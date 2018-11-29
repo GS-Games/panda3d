@@ -3,6 +3,7 @@ set(P3PHYSICS_HEADERS
     angularIntegrator.h angularVectorForce.I
     angularVectorForce.h baseForce.I baseForce.h
     baseIntegrator.I baseIntegrator.h config_physics.h
+    forces.h
     forceNode.I forceNode.h
     linearControlForce.I linearControlForce.h
     linearCylinderVortexForce.I linearCylinderVortexForce.h
@@ -36,10 +37,12 @@ set(P3PHYSICS_SOURCES
     physicsObjectCollection.cxx)
 
 composite_sources(p3physics P3PHYSICS_SOURCES)
-add_component_library(p3physics SYMBOL BUILDING_PANDAPHYSICS
+add_component_library(p3physics SYMBOL BUILDING_PANDA_PHYSICS
   ${P3PHYSICS_HEADERS} ${P3PHYSICS_SOURCES})
 target_link_libraries(p3physics panda)
 target_interrogate(p3physics ALL)
 
-install(TARGETS p3physics DESTINATION lib)
+if(NOT BUILD_METALIBS)
+  install(TARGETS p3physics DESTINATION lib RUNTIME DESTINATION bin)
+endif()
 install(FILES ${P3PHYSICS_HEADERS} DESTINATION include/panda3d)

@@ -6,6 +6,7 @@
 # Functions:
 #   target_interrogate(target [ALL] [source1 [source2 ...]])
 #   add_python_module(module [lib1 [lib2 ...]])
+#   add_python_target(target [source1 [source2 ...]])
 #
 
 set(IGATE_FLAGS -DCPPPARSER -D__cplusplus -Dvolatile -Dmutable)
@@ -28,7 +29,7 @@ set(INTERROGATE_EXCLUDE_REGEXES
   ".*_src\\..*")
 
 if(WIN32)
-  list(APPEND IGATE_FLAGS -longlong __int64 -D_X86_ -D__STDC__=1 -DWIN32_VC -D "_declspec(param)=" -D "__declspec(param)=" -D_near -D_far -D__near -D__far -D_WIN32 -D__stdcall -DWIN32)
+  list(APPEND IGATE_FLAGS -D_X86_ -D__STDC__=1 -DWIN32_VC -D "_declspec(param)=" -D "__declspec(param)=" -D_near -D_far -D__near -D__far -D_WIN32 -D__stdcall -DWIN32)
 endif()
 if(INTERROGATE_VERBOSE)
   list(APPEND IGATE_FLAGS "-v")
@@ -99,8 +100,14 @@ function(target_interrogate target)
   # relative to it, thereby shortening the command-line even more.
   # Since this is not an Interrogate-specific property, it is not named with
   # an IGATE_ prefix.
-  set_target_properties("${target}" PROPERTIES TARGET_SRCDIR
-    "${CMAKE_CURRENT_SOURCE_DIR}")
+  set_target_properties("${target}" PROPERTIES
+    TARGET_SRCDIR "${CMAKE_CURRENT_SOURCE_DIR}")
+
+  # Also store where the build files are kept, so the Interrogate output can go
+  # there as well.
+  set_target_properties("${target}" PROPERTIES
+    TARGET_BINDIR "${CMAKE_CURRENT_BINARY_DIR}")
+
 endfunction(target_interrogate)
 
 #
@@ -163,6 +170,12 @@ function(interrogate_sources target output database language_flags)
     endif()
   endforeach(source)
 
+  # Also add extensions, in relative-path form
+  foreach(extension ${extensions})
+    file(RELATIVE_PATH rel_extension "${srcdir}" "${extension}")
+    list(APPEND scan_sources "${rel_extension}")
+  endforeach(extension)
+
   # Interrogate also needs the include paths, so we'll extract them from the
   # target. These are available via a generator expression.
 
@@ -185,21 +198,12 @@ function(interrogate_sources target output database language_flags)
   # a JOIN will cause it to be escaped. Tabs are not escaped and will
   # separate correctly.
   set(include_flags "-I$<JOIN:$<TARGET_PROPERTY:${target}_igate_internal,INTERFACE_INCLUDE_DIRECTORIES>,\t-I>")
-  # The above must also be included when compiling the resulting _igate.cxx file:
-  include_directories("$<TARGET_PROPERTY:${target},INTERFACE_INCLUDE_DIRECTORIES>")
 
   # Get the compiler definition flags. These must be passed to Interrogate
   # in the same way that they are passed to the compiler so that Interrogate
   # will preprocess each file in the same way.
-  set(define_flags)
-  get_target_property(target_defines "${target}" INTERFACE_COMPILE_DEFINITIONS)
-  if(target_defines)
-    foreach(target_define ${target_defines})
-      list(APPEND define_flags "-D${target_define}")
-      # And add the same definition when we compile the _igate.cxx file:
-      add_definitions("-D${target_define}")
-    endforeach(target_define)
-  endif()
+  set(define_flags "$<JOIN:\t$<SEMICOLON>$<TARGET_PROPERTY:${target},COMPILE_DEFINITIONS>,\t-D>")
+
   # If this is a release build that has NDEBUG defined, we need that too:
   string(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
   if("${CMAKE_CXX_FLAGS_${build_type}}" MATCHES ".*NDEBUG.*")
@@ -208,7 +212,7 @@ function(interrogate_sources target output database language_flags)
 
   add_custom_command(
     OUTPUT "${output}" "${database}"
-    COMMAND interrogate
+    COMMAND host_interrogate
       -oc "${output}"
       -od "${database}"
       -srcdir "${srcdir}"
@@ -217,15 +221,19 @@ function(interrogate_sources target output database language_flags)
       ${IGATE_FLAGS}
       ${language_flags}
       ${define_flags}
-      -S "${PROJECT_BINARY_DIR}/include"
+      -S "${PROJECT_SOURCE_DIR}/dtool/src/interrogatedb"
       -S "${PROJECT_SOURCE_DIR}/dtool/src/parser-inc"
       -S "${PYTHON_INCLUDE_DIRS}"
       ${include_flags}
       ${scan_sources}
-      ${extensions}
-    DEPENDS interrogate ${sources} ${extensions} ${nfiles}
+    DEPENDS host_interrogate ${sources} ${extensions} ${nfiles}
     COMMENT "Interrogating ${target}"
   )
+
+  # Propagate the target's compile definitions to the output file
+  set_source_files_properties("${output}" PROPERTIES
+    COMPILE_DEFINITIONS "$<TARGET_PROPERTY:${target},INTERFACE_COMPILE_DEFINITIONS>")
+
 endfunction(interrogate_sources)
 
 #
@@ -237,15 +245,17 @@ endfunction(interrogate_sources)
 # Python module when it's initialized.
 #
 function(add_python_module module)
-  if(NOT HAVE_PYTHON OR NOT INTERROGATE_PYTHON_INTERFACE)
+  if(NOT INTERROGATE_PYTHON_INTERFACE)
     return()
   endif()
 
   set(targets)
   set(link_targets)
   set(import_flags)
-  set(infiles)
-  set(sources)
+  set(infiles_rel)
+  set(infiles_abs)
+  set(sources_abs)
+  set(extensions)
 
   set(link_keyword OFF)
   set(import_keyword OFF)
@@ -270,50 +280,62 @@ function(add_python_module module)
   endif()
 
   foreach(target ${targets})
-    interrogate_sources(${target} "${target}_igate.cxx" "${target}.in"
+    get_target_property(workdir_abs "${target}" TARGET_BINDIR)
+    if(NOT workdir_abs)
+      # No TARGET_BINDIR was set, so we'll just use our current directory:
+      set(workdir_abs "${CMAKE_CURRENT_BINARY_DIR}")
+    endif()
+    # Keep command lines short
+    file(RELATIVE_PATH workdir_rel "${CMAKE_CURRENT_BINARY_DIR}" "${workdir_abs}")
+
+    interrogate_sources(${target}
+      "${workdir_abs}/${target}_igate.cxx" "${workdir_abs}/${target}.in"
       "-python-native;-module;panda3d.${module}")
+
     get_target_property(target_extensions "${target}" IGATE_EXTENSIONS)
-    list(APPEND infiles "${target}.in")
-    list(APPEND sources "${target}_igate.cxx" ${target_extensions})
+    list(APPEND infiles_rel "${workdir_rel}/${target}.in")
+    list(APPEND infiles_abs "${workdir_abs}/${target}.in")
+    list(APPEND sources_abs "${workdir_abs}/${target}_igate.cxx")
+    list(APPEND extensions ${target_extensions})
   endforeach(target)
 
   add_custom_command(
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${module}_module.cxx"
-    COMMAND interrogate_module
+    COMMAND host_interrogate_module
       -oc "${CMAKE_CURRENT_BINARY_DIR}/${module}_module.cxx"
       -module ${module} -library ${module}
       ${import_flags}
       ${INTERROGATE_MODULE_OPTIONS}
-      ${IMOD_FLAGS} ${infiles}
-    DEPENDS interrogate_module ${infiles}
+      ${IMOD_FLAGS} ${infiles_rel}
+    DEPENDS host_interrogate_module ${infiles_abs}
     COMMENT "Generating module ${module}"
   )
 
-  add_library(${module} ${MODULE_TYPE} "${module}_module.cxx" ${sources})
-  target_link_libraries(${module}
-    ${link_targets} ${PYTHON_LIBRARIES} p3dtool)
+  add_python_target(panda3d.${module} "${module}_module.cxx" ${sources_abs} ${extensions})
+  target_link_libraries(panda3d.${module} ${link_targets})
 
-  set_target_properties(${module} PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/panda3d"
-    PREFIX ""
-  )
-  if(WIN32 AND NOT CYGWIN)
-    set_target_properties(${module} PROPERTIES SUFFIX ".pyd")
+  if(CMAKE_VERSION VERSION_LESS "3.11")
+    # CMake <3.11 doesn't allow generator expressions on source files, so we
+    # need to copy them to our target, which does allow them.
+
+    foreach(source ${sources_abs})
+      get_source_file_property(compile_definitions "${source}" COMPILE_DEFINITIONS)
+      if(compile_definitions)
+        set_property(TARGET panda3d.${module} APPEND PROPERTY
+          COMPILE_DEFINITIONS ${compile_definitions})
+
+        set_source_files_properties("${source}" PROPERTIES COMPILE_DEFINITIONS "")
+      endif()
+    endforeach(source)
   endif()
-
-  install(TARGETS ${module} DESTINATION "${PYTHON_ARCH_INSTALL_DIR}/panda3d")
 
   list(APPEND ALL_INTERROGATE_MODULES "${module}")
   set(ALL_INTERROGATE_MODULES "${ALL_INTERROGATE_MODULES}" CACHE INTERNAL "Internal variable")
 endfunction(add_python_module)
 
 
-if(HAVE_PYTHON)
-  # We have to create an __init__.py so that Python 2.x can recognize 'panda3d'
-  # as a package.
-  file(WRITE "${PROJECT_BINARY_DIR}/panda3d/__init__.py" "")
-
+if(INTERROGATE_PYTHON_INTERFACE AND BUILD_SHARED_LIBS)
   # The Interrogate path needs to be installed to the architecture-dependent
   # Python directory.
-  install(FILES "${PROJECT_BINARY_DIR}/panda3d/__init__.py" DESTINATION "${PYTHON_ARCH_INSTALL_DIR}/panda3d")
+  install_python_package("${PROJECT_BINARY_DIR}/panda3d")
 endif()

@@ -5,11 +5,14 @@ set(P3LINMATH_HEADERS
   configVariableColor.h configVariableColor.I
   coordinateSystem.h dbl2fltnames.h dblnames.h
   deg_2_rad.h deg_2_rad.I
-  flt2dblnames.h fltnames.h lcast_to.h lcast_to_src.h
-  lcast_to_src.I lmatrix.h lmatrix_ext.h lmatrix3_src.I
-  lmatrix3_src.h lmatrix4_src.I
-  lmatrix4_src.h lorientation.h
-  lorientation_src.I lorientation_src.h
+  flt2dblnames.h fltnames.h
+  intnames.h
+  lcast_to.h lcast_to_src.h lcast_to_src.I
+  lmatrix.h lmatrix_ext.h
+  lmat_ops.h lmat_ops_src.h lmat_ops_src.I
+  lmatrix3_src.h lmatrix3_src.I
+  lmatrix4_src.h lmatrix4_src.I
+  lorientation.h lorientation_src.h lorientation_src.I
   lpoint2.h lpoint2_src.I lpoint2_src.h
   lpoint3.h lpoint3_src.I lpoint3_src.h
   lpoint4.h lpoint4_src.I lpoint4_src.h
@@ -46,11 +49,12 @@ set(P3LINMATH_SOURCES
 composite_sources(p3linmath P3LINMATH_SOURCES)
 add_component_library(p3linmath SYMBOL BUILDING_PANDA_LINMATH
   ${P3LINMATH_HEADERS} ${P3LINMATH_SOURCES})
-target_link_libraries(p3linmath p3express p3pandabase)
-target_use_packages(p3linmath EIGEN)
+target_link_libraries(p3linmath p3pandabase pandaexpress PKG::EIGEN)
 target_interrogate(p3linmath ALL)
 
-install(TARGETS p3linmath DESTINATION lib)
+if(NOT BUILD_METALIBS)
+  install(TARGETS p3linmath DESTINATION lib RUNTIME DESTINATION bin)
+endif()
 install(FILES ${P3LINMATH_HEADERS} DESTINATION include/panda3d)
 
 #begin test_bin_target

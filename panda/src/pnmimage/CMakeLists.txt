@@ -1,5 +1,6 @@
 set(P3PNMIMAGE_HEADERS
   config_pnmimage.h
+  convert_srgb.h convert_srgb.I
   pfmFile.I pfmFile.h
   pnmbitio.h
   pnmBrush.h pnmBrush.I
@@ -40,5 +41,7 @@ add_component_library(p3pnmimage SYMBOL BUILDING_PANDA_PNMIMAGE
 target_link_libraries(p3pnmimage p3mathutil)
 target_interrogate(p3pnmimage ALL EXTENSIONS ${P3PNMIMAGE_IGATEEXT})
 
-install(TARGETS p3pnmimage DESTINATION lib)
+if(NOT BUILD_METALIBS)
+  install(TARGETS p3pnmimage DESTINATION lib RUNTIME DESTINATION bin)
+endif()
 install(FILES ${P3PNMIMAGE_HEADERS} DESTINATION include/panda3d)

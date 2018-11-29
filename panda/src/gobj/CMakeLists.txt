@@ -43,6 +43,8 @@ set(P3GOBJ_HEADERS
   perspectiveLens.I perspectiveLens.h
   preparedGraphicsObjects.I preparedGraphicsObjects.h
   queryContext.I queryContext.h
+  samplerContext.h samplerContext.I
+  samplerState.h samplerState.I
   savedContext.I savedContext.h
   shader.I shader.h
   shaderBuffer.h shaderBuffer.I
@@ -170,11 +172,13 @@ set(P3GOBJ_IGATEEXT
 composite_sources(p3gobj P3GOBJ_SOURCES)
 add_component_library(p3gobj NOINIT SYMBOL BUILDING_PANDA_GOBJ
   ${P3GOBJ_HEADERS} ${P3GOBJ_SOURCES})
-target_link_libraries(p3gobj p3gsgbase p3pnmimage)
-target_use_packages(p3gobj ZLIB SQUISH CG)
+target_link_libraries(p3gobj p3gsgbase p3pnmimage
+  PKG::ZLIB PKG::SQUISH PKG::CG)
 target_interrogate(p3gobj ALL EXTENSIONS ${P3GOBJ_IGATEEXT})
 
-install(TARGETS p3gobj DESTINATION lib)
+if(NOT BUILD_METALIBS)
+  install(TARGETS p3gobj DESTINATION lib RUNTIME DESTINATION bin)
+endif()
 install(FILES ${P3GOBJ_HEADERS} DESTINATION include/panda3d)
 
 #begin test_bin_target

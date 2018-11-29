@@ -22,7 +22,8 @@ set(INTERROGATE_HEADERS
   parameterRemapToString.h
   parameterRemapHandleToInt.h
   parameterRemapUnchanged.h
-  typeManager.h)
+  typeManager.h
+)
 
 set(INTERROGATE_SOURCES
   functionRemap.cxx
@@ -47,16 +48,52 @@ set(INTERROGATE_SOURCES
   parameterRemapToString.cxx
   parameterRemapHandleToInt.cxx
   parameterRemapUnchanged.cxx
-  typeManager.cxx)
+  typeManager.cxx
+)
+
+set(INTERROGATE_PREAMBLE_PYTHON_NATIVE
+  ../interrogatedb/py_panda.cxx
+  ../interrogatedb/py_compat.cxx
+  ../interrogatedb/py_wrappers.cxx
+  ../interrogatedb/dtool_super_base.cxx
+)
 
 composite_sources(interrogate INTERROGATE_SOURCES)
 
 add_executable(interrogate ${INTERROGATE_HEADERS} ${INTERROGATE_SOURCES})
-target_link_libraries(interrogate
-  p3cppParser p3dtoolconfig p3pystub ${_OPENSSL_LIBRARIES})
-install(TARGETS interrogate DESTINATION bin)
+target_link_libraries(interrogate p3cppParser p3dtoolconfig p3pystub
+  PKG::OPENSSL)
 
-add_executable(interrogate_module interrogate_module.cxx)
-target_link_libraries(interrogate_module
-  p3cppParser p3dtoolconfig p3pystub ${_OPENSSL_LIBRARIES})
-install(TARGETS interrogate_module DESTINATION bin)
+# Python preamble for interrogate_module
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/interrogate_preamble_python_native.cxx
+  "extern const char interrogate_preamble_python_native[];\n")
+file(APPEND ${CMAKE_CURRENT_BINARY_DIR}/interrogate_preamble_python_native.cxx
+  "const char interrogate_preamble_python_native[] = (\n")
+foreach(preamble_file ${INTERROGATE_PREAMBLE_PYTHON_NATIVE})
+  file(READ ${preamble_file} preamble_content)
+  string(REPLACE "\\" "\\\\" preamble_content "${preamble_content}")
+  string(REPLACE "\"" "\\\"" preamble_content "${preamble_content}")
+  string(REPLACE "\n" "\\n" preamble_content "${preamble_content}")
+  file(APPEND ${CMAKE_CURRENT_BINARY_DIR}/interrogate_preamble_python_native.cxx
+    "  \"${preamble_content}\"\n")
+endforeach(preamble_file)
+file(APPEND ${CMAKE_CURRENT_BINARY_DIR}/interrogate_preamble_python_native.cxx
+  ");\n")
+
+add_executable(interrogate_module interrogate_module.cxx
+  ${CMAKE_CURRENT_BINARY_DIR}/interrogate_preamble_python_native.cxx)
+target_link_libraries(interrogate_module p3cppParser p3dtoolconfig p3pystub
+  PKG::OPENSSL)
+
+if(NOT CMAKE_CROSSCOMPILING)
+  add_executable(host_interrogate ALIAS interrogate)
+  add_executable(host_interrogate_module ALIAS interrogate_module)
+endif()
+
+if(WANT_INTERROGATE)
+  install(TARGETS interrogate interrogate_module DESTINATION bin)
+  install(FILES ${INTERROGATE_HEADERS} DESTINATION include/panda3d)
+else()
+  set_target_properties(interrogate interrogate_module
+    PROPERTIES EXCLUDE_FROM_ALL ON)
+endif()

@@ -6,10 +6,16 @@
 # Assumes an attempt to find the package has already been made with
 # find_package(). (i.e. relies on packagename_FOUND variable)
 #
+# The packages are added as imported/interface libraries in the PKG::
+# namespace.  If the package is not found (or disabled by the user),
+# a dummy package will be created instead.  Therefore, it is safe
+# to link against the PKG::PACKAGENAME target unconditionally.
+#
 # Function: package_option
 # Usage:
 #   package_option(package_name package_doc_string
 #                  [DEFAULT ON | OFF]
+#                  [IMPORTED_AS CMake::Imported::Target [...]]
 #                  [FOUND_AS find_name]
 #                  [LICENSE license])
 # Examples:
@@ -23,13 +29,18 @@
 #       FOUND_AS indicates the name of the CMake find_package() module, which
 #       may differ from Panda3D's internal name for that package.
 #
+#       IMPORTED_AS is used to indicate that the find_package() may have
+#       provided one or more IMPORTED targets, and that if at least one is
+#       found, the IMPORTED target(s) should be used instead of the
+#       variables provided by find_package()
 #
-# Function: config_package
+#
+# Function: package_status
 # Usage:
-#   config_package(package_name "Package description" ["Config summary"])
+#   package_status(package_name "Package description" ["Config summary"])
 # Examples:
-#   config_package(OpenAL "OpenAL Audio Output")
-#   config_package(ROCKET "Rocket" "without Python bindings")
+#   package_status(OpenAL "OpenAL Audio Output")
+#   package_status(ROCKET "Rocket" "without Python bindings")
 #
 #
 # Function: show_packages
@@ -37,14 +48,7 @@
 #   show_packages()
 #
 #   This prints the package usage report using the information provided in
-#   calls to config_package above.
-#
-#
-# Function: target_use_packages
-# Usage:
-#   target_use_packages(target [PACKAGES ...])
-# Examples:
-#   target_use_packages(mylib PYTHON PNG)
+#   calls to package_status above.
 #
 
 #
@@ -64,6 +68,7 @@ function(package_option name)
   set(command)
   set(default)
   set(found_as "${name}")
+  set(imported_as)
   set(license "")
   set(cache_string)
 
@@ -89,6 +94,12 @@ function(package_option name)
     elseif(arg STREQUAL "LICENSE")
       set(command "LICENSE")
 
+    elseif(arg STREQUAL "IMPORTED_AS")
+      set(command "IMPORTED_AS")
+
+    elseif(command STREQUAL "IMPORTED_AS")
+      list(APPEND imported_as "${arg}")
+
     else()
       # Yes, a list, because semicolons can be in there, and
       # that gets split up into multiple args, so we have to
@@ -98,8 +109,8 @@ function(package_option name)
     endif()
   endforeach()
 
-  if(command STREQUAL "DEFAULT")
-    message(SEND_ERROR "DEFAULT in package_option takes an argument")
+  if(command AND NOT command STREQUAL "IMPORTED_AS")
+    message(SEND_ERROR "${command} in package_option takes an argument")
   endif()
 
   # If the default is not set, we set it.
@@ -112,7 +123,6 @@ function(package_option name)
       else()
         list(FIND PANDA_DIST_USE_LICENSES ${license} license_index)
         # If the license isn't in the accept listed, don't use the package
-        message("INDEX for ${name}: ${license_index}")
         if(${license_index} EQUAL "-1")
           set(default OFF)
         else()
@@ -145,41 +155,81 @@ function(package_option name)
 
   set(PANDA_PACKAGE_DEFAULT_${name} "${default}" PARENT_SCOPE)
 
-  # Create the option.
+  # Create the INTERFACE library used to depend on this package.
+  add_library(PKG::${name} INTERFACE IMPORTED GLOBAL)
+
+  # Explicitly record the package's include directories as system include
+  # directories.  CMake does do this automatically for INTERFACE libraries, but
+  # it does it by discovering all transitive links first, then reading
+  # INTERFACE_INCLUDE_DIRECTORIES for those which are INTERFACE libraries.  So,
+  # this would be broken for the metalib system (pre CMake 3.12) which doesn't
+  # "link" the object libraries.
+  if(CMAKE_VERSION VERSION_LESS "3.12")
+    set_target_properties(PKG::${name} PROPERTIES
+      INTERFACE_SYSTEM_INCLUDE_DIRECTORIES
+      "$<TARGET_PROPERTY:PKG::${name},INTERFACE_INCLUDE_DIRECTORIES>")
+  endif()
+
+  # Create the option, and if it actually is enabled, populate the INTERFACE
+  # library created above
   option("HAVE_${name}" "${cache_string}" "${default}")
   if(HAVE_${name})
-    set(_${name}_INCLUDES ${${found_as}_INCLUDE_DIRS} ${${found_as}_INCLUDE_DIR}
-      CACHE INTERNAL "<Internal>")
-    if(${found_as}_LIBRARIES)
-      set(_${name}_LIBRARIES ${${found_as}_LIBRARIES} CACHE INTERNAL "<Internal>")
-    else()
-      set(_${name}_LIBRARIES "${${found_as}_LIBRARY}" CACHE INTERNAL "<Internal>")
+    set(use_variables ON)
+
+    foreach(implib ${imported_as})
+      if(TARGET ${implib})
+        # We found one of the implibs, so we don't need to use variables
+        # (below) anymore
+        set(use_variables OFF)
+
+        # Yes, this is ugly.  See below for an explanation.
+        target_link_libraries(PKG::${name} INTERFACE
+          "$<$<NOT:$<BOOL:$<TARGET_PROPERTY:IS_INTERROGATE>>>:${implib}>")
+      endif()
+    endforeach(implib)
+
+    if(use_variables)
+      if(${found_as}_INCLUDE_DIRS)
+        set(includes ${${found_as}_INCLUDE_DIRS})
+      else()
+        set(includes "${${found_as}_INCLUDE_DIR}")
+      endif()
+      if(${found_as}_LIBRARIES)
+        set(libs ${${found_as}_LIBRARIES})
+      else()
+        set(libs "${${found_as}_LIBRARY}")
+      endif()
+
+      target_link_libraries(PKG::${name} INTERFACE ${libs})
+
+      # This is gross, but we actually want to hide package include directories
+      # from Interrogate to make sure it relies on parser-inc instead, so we'll
+      # use some generator expressions to do that.
+      set_target_properties(PKG::${name} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
+        "$<$<NOT:$<BOOL:$<TARGET_PROPERTY:IS_INTERROGATE>>>:${includes}>")
     endif()
-  else()
-    unset(_${name}_INCLUDES CACHE)
-    unset(_${name}_LIBRARIES CACHE)
   endif()
-endfunction()
+endfunction(package_option)
 
 set(_ALL_CONFIG_PACKAGES CACHE INTERNAL "Internal variable")
 
 #
-# config_package
+# package_status
 #
-function(config_package name desc)
+function(package_status name desc)
   set(note "")
   foreach(arg ${ARGN})
     set(note "${arg}")
   endforeach()
 
   if(NOT PANDA_DID_SET_OPTION_${name})
-    message(SEND_ERROR "config_package(${name}) was called before package_option(${name}).
+    message(SEND_ERROR "package_status(${name}) was called before package_option(${name}).
                         This is a bug in the cmake build scripts.")
   endif()
 
   list(FIND _ALL_CONFIG_PACKAGES "${name}" called_twice)
   if(called_twice GREATER -1)
-    message(SEND_ERROR "config_package(${name}) was called twice.
+    message(SEND_ERROR "package_status(${name}) was called twice.
                         This is a bug in the cmake build scripts.")
   else()
     list(APPEND _ALL_CONFIG_PACKAGES "${name}")
@@ -220,24 +270,29 @@ function(show_packages)
 endfunction()
 
 #
-# target_use_packages
+# find_package
 #
-# Useful macro that picks up a package located using find_package
-# as dependencies of a target that is going to be built.
+# This override is necessary because CMake's default behavior is to run
+# find_package in MODULE mode, *then* in CONFIG mode.  This is silly!  CONFIG
+# mode makes more sense to be done first, since any system config file will
+# know vastly more about the package's configuration than a module can hope to
+# guess.
 #
-macro(target_use_packages target)
-  set(libs ${ARGV})
-  list(REMOVE_AT libs 0)
+macro(find_package name)
+  if(";${ARGN};" MATCHES ";(CONFIG|MODULE|NO_MODULE);")
+    # Caller explicitly asking for a certain mode; so be it.
+    _find_package(${ARGV})
+  else()
+    string(TOUPPER "${name}" __pkgname_upper)
 
-  foreach(lib ${libs})
-    if(HAVE_${lib})
-      target_link_libraries("${target}" ${_${lib}_LIBRARIES})
-
-      # This is gross, but we actually want to hide package include directories
-      # from Interrogate to make sure it relies on parser-inc instead, so we'll
-      # use some generator expressions to do that.
-      target_include_directories("${target}" PUBLIC
-        $<$<NOT:$<BOOL:$<TARGET_PROPERTY:IS_INTERROGATE>>>:${_${lib}_INCLUDES}>)
+    # Try CONFIG
+    _find_package("${name}" CONFIG ${ARGN})
+    if(NOT ${name}_FOUND)
+      # CONFIG didn't work, fall back to MODULE
+      _find_package("${name}" MODULE ${ARGN})
+    else()
+      # Case-sensitivity
+      set(${__pkgname_upper}_FOUND 1)
     endif()
-  endforeach(lib)
-endmacro(target_use_packages)
+  endif()
+endmacro(find_package)

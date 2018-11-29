@@ -155,108 +155,8 @@ endif()
 # Now go through all the packages and report whether we have them.
 show_packages()
 
-if(HAVE_SPEEDTREE)
-  message("+ SpeedTree")
-else()
-  message("- Did not find SpeedTree")
-endif()
-
-if(HAVE_GTK2)
-  message("+ gtk+-2")
-else()
-  message("- Did not find gtk+-2")
-endif()
-
-if(HAVE_GL)
-  message("+ OpenGL")
-else()
-  message("- Did not find OpenGL")
-endif()
-
-if(HAVE_GLES)
-  message("+ OpenGL ES 1")
-else()
-  message("- Did not find OpenGL ES 1")
-endif()
-
-if(HAVE_GLES2)
-  message("+ OpenGL ES 2")
-else()
-  message("- Did not find OpenGL ES 2")
-endif()
-
-if(HAVE_DX9)
-  message("+ DirectX9")
-else()
-  message("- Did not find DirectX9")
-endif()
-
-if(HAVE_TINYDISPLAY)
-  message("+ Tinydisplay")
-else()
-  message("- Not building Tinydisplay")
-endif()
-
-if(HAVE_X11)
-  message("+ X11")
-else()
-  message("- Did not find X11")
-endif()
-
-if(HAVE_OPENCV)
-  message("+ OpenCV")
-else()
-  message("- Did not find OpenCV")
-endif()
-
-if(HAVE_AWESOMIUM)
-  message("+ AWESOMIUM")
-else()
-  message("- Did not find AWESOMIUM")
-endif()
-
-if(HAVE_MAYA)
-  message("+ OpenMaya")
-else()
-  message("- Did not find OpenMaya")
-endif()
-
-if(HAVE_FCOLLADA)
-  message("+ FCollada")
-else()
-  message("- Did not find FCollada")
-endif()
-
-if(HAVE_ASSIMP)
-  message("+ Assimp")
-else()
-  message("- Did not find Assimp")
-endif()
-
-if(HAVE_ARTOOLKIT)
-  message("+ ARToolKit")
-else()
-  message("- Did not find ARToolKit")
-endif()
-
-if(HAVE_ROCKET)
-  if(HAVE_ROCKET_PYTHON)
-    message("+ libRocket with Python bindings")
-  else()
-    message("+ libRocket without Python bindings")
-  endif()
-else()
-  message("- Did not find libRocket")
-endif()
-
-if(HAVE_VORBIS)
-  message("+ libvorbis (Ogg Vorbis Decoder)")
-else()
-  message("- Did not find libvorbis (Ogg Vorbis Decoder)")
-endif()
-
 message("")
-if(HAVE_INTERROGATE AND HAVE_PYTHON)
+if(INTERROGATE_PYTHON_INTERFACE)
   message("Compilation will generate Python interfaces for Python ${PYTHON_VERSION_STRING}.")
 else()
   message("Configuring Panda WITHOUT Python interfaces.")
@@ -280,6 +180,14 @@ message("See dtool_config.h for more details about the specified configuration."
 message("")
 
 # Generate dtool_config.h
-configure_file(dtool_config.h.in "${PROJECT_BINARY_DIR}/include/dtool_config.h")
-include_directories("${PROJECT_BINARY_DIR}/include")
-#install(FILES "${PROJECT_BINARY_DIR}/dtool_config.h" DESTINATION include/panda3d)
+if("${CMAKE_CFG_INTDIR}" STREQUAL ".")
+  # Single-configuration generator
+  set(intdir ".")
+else()
+  # Multi-configuration generator
+  set(intdir "${CMAKE_BUILD_TYPE}")
+endif()
+
+configure_file(dtool_config.h.in "${PROJECT_BINARY_DIR}/include/${intdir}/dtool_config.h")
+install(FILES "${PROJECT_BINARY_DIR}/include/${intdir}/dtool_config.h"
+  DESTINATION include/panda3d)

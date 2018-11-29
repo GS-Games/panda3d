@@ -1,6 +1,7 @@
 configure_file(prc_parameters.h.in prc_parameters.h)
 
 set(P3PRC_HEADERS
+  androidLogStream.h
   bigEndian.h
   config_prc.h
   configDeclaration.I configDeclaration.h
@@ -27,7 +28,7 @@ set(P3PRC_HEADERS
   notifyCategory.I notifyCategory.h
   notifyCategoryProxy.I notifyCategoryProxy.h
   notifySeverity.h
-  prcKeyRegistry.h
+  prcKeyRegistry.h prcKeyRegistry.I
   reversedNumericData.I reversedNumericData.h
   streamReader.I streamReader.h
   streamWrapper.I streamWrapper.h
@@ -72,12 +73,11 @@ composite_sources(p3prc P3PRC_SOURCES)
 
 add_component_library(p3prc NOINIT SYMBOL BUILDING_DTOOL_PRC
   ${P3PRC_HEADERS} ${P3PRC_SOURCES})
-target_include_directories(p3prc PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
-# The extensions need py_panda.h and extension.h from interrogatedb
-target_include_directories(p3prc PUBLIC
-  $<TARGET_PROPERTY:p3interrogatedb,INTERFACE_INCLUDE_DIRECTORIES>)
-target_link_libraries(p3prc p3dtool ${_OPENSSL_LIBRARIES})
+target_include_directories(p3prc PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
+target_link_libraries(p3prc p3dtool PKG::OPENSSL)
 target_interrogate(p3prc ALL EXTENSIONS ${P3PRC_IGATEEXT})
 
-install(TARGETS p3prc DESTINATION lib)
+if(NOT BUILD_METALIBS)
+  install(TARGETS p3prc DESTINATION lib RUNTIME DESTINATION bin)
+endif()
 install(FILES ${P3PRC_HEADERS} DESTINATION include/panda3d)

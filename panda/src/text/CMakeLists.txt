@@ -36,11 +36,14 @@ set(P3TEXT_SOURCES
 composite_sources(p3text P3TEXT_SOURCES)
 add_component_library(p3text SYMBOL BUILDING_PANDA_TEXT
   ${P3TEXT_HEADERS} ${P3TEXT_SOURCES})
-target_link_libraries(p3text p3parametrics)
+target_link_libraries(p3text p3parametrics
+  PKG::HARFBUZZ)
 if(HAVE_FREETYPE)
   target_link_libraries(p3text p3pnmtext)
 endif()
 target_interrogate(p3text ALL)
 
-install(TARGETS p3text DESTINATION lib)
+if(NOT BUILD_METALIBS)
+  install(TARGETS p3text DESTINATION lib RUNTIME DESTINATION bin)
+endif()
 install(FILES ${P3TEXT_HEADERS} DESTINATION include/panda3d)
