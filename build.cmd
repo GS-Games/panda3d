@@ -1,0 +1,2 @@
+thirdparty\win-python-x64\python.exe makepanda/makepanda.py --everything --msvc-version=14.1 --windows-sdk=10 --installer --threads 4 --no-maya6 --no-maya65 --no-maya7 --no-maya8 --no-maya85 --no-maya2008 --no-maya2009 --no-maya2010 --no-maya2011 --no-maya2012 --no-maya2013 --no-maya20135 --no-maya2014 --no-maya2015 --no-maya2016 --no-maya20165 --no-maya2017
+pause

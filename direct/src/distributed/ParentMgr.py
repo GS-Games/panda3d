@@ -1,6 +1,7 @@
 """ParentMgr module: contains the ParentMgr class"""
 
 from direct.directnotify import DirectNotifyGlobal
+
 from direct.showbase.PythonUtil import isDefaultValue
 
 
@@ -29,9 +30,11 @@ class ParentMgr:
 
     def __init__(self):
         self.token2nodepath = {}
+
         # these are nodepaths that have requested to be parented to
         # a node that has not yet registered as a parent
         self.pendingParentToken2children = {}
+
         # Multiple reparent requests may come in for a given child
         # before that child can successfully be reparented. We need to
         # make sure that each child is only scheduled to be parented to
@@ -42,18 +45,25 @@ class ParentMgr:
 
     def destroy(self):
         del self.token2nodepath
+
         del self.pendingParentToken2children
+
         del self.pendingChild2parentToken
 
     def privRemoveReparentRequest(self, child):
         """ this internal function removes any currently-pending reparent
+
         request for the given child nodepath """
+
         if child in self.pendingChild2parentToken:
             self.notify.debug("cancelling pending reparent of %s to '%s'" %
                               (repr(child),
                                self.pendingChild2parentToken[child]))
+
             parentToken = self.pendingChild2parentToken[child]
+
             del self.pendingChild2parentToken[child]
+
             self.pendingParentToken2children[parentToken].remove(child)
 
     def requestReparent(self, child, parentToken):
@@ -62,21 +72,30 @@ class ParentMgr:
             # this child may already be waiting on a different parent;
             # make sure they aren't any more
             self.privRemoveReparentRequest(child)
+
             self.notify.debug("performing wrtReparent of %s to '%s'" %
                               (repr(child), parentToken))
+
             child.wrtReparentTo(self.token2nodepath[parentToken])
+
         else:
             if isDefaultValue(parentToken):
                 self.notify.error('child %s requested reparent to default-value token: %s' % (repr(child), parentToken))
+
             self.notify.debug(
                 "child %s requested reparent to parent '%s' that is not (yet) registered" %
                 (repr(child), parentToken))
+
             # cancel any pending reparent on behalf of this child
             self.privRemoveReparentRequest(child)
+
             # make note of this pending parent request
             self.pendingChild2parentToken[child] = parentToken
+
             self.pendingParentToken2children.setdefault(parentToken, [])
+
             self.pendingParentToken2children[parentToken].append(child)
+
             # there is no longer any valid place for the child in the
             # scenegraph; put it under hidden
             child.reparentTo(hidden)
@@ -95,12 +114,15 @@ class ParentMgr:
                 self.notify.error('parent token %s (for %s) is out of uint32 range' % (token, repr(parent)))
 
         self.notify.debug("registering %s as '%s'" % (repr(parent), token))
+
         self.token2nodepath[token] = parent
 
         # if we have any pending children, add them
         if token in self.pendingParentToken2children:
             children = self.pendingParentToken2children[token]
+
             del self.pendingParentToken2children[token]
+
             for child in children:
                 # NOTE: We do a plain-old reparentTo here (non-wrt)
                 # under the assumption that the node has been
@@ -135,15 +157,21 @@ class ParentMgr:
                 # rendering starts.
                 self.notify.debug("performing reparent of %s to '%s'" %
                                   (repr(child), token))
+
                 child.reparentTo(self.token2nodepath[token])
+
                 # remove this child from the child->parent table
                 assert self.pendingChild2parentToken[child] == token
+
                 del self.pendingChild2parentToken[child]
 
     def unregisterParent(self, token):
         if token not in self.token2nodepath:
             self.notify.warning("unregisterParent: unknown parent token '%s'" %
                                 token)
+
             return
+
         self.notify.debug("unregistering parent '%s'" % (token))
+
         del self.token2nodepath[token]

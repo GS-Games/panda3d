@@ -1,7 +1,9 @@
 """DistributedObjectGlobal module: contains the DistributedObjectGlobal class"""
 
 from direct.directnotify.DirectNotifyGlobal import directNotify
+
 from direct.distributed.DistributedObject import DistributedObject
+
 
 class DistributedObjectGlobal(DistributedObject):
     """
@@ -18,7 +20,9 @@ class DistributedObjectGlobal(DistributedObject):
 
     def __init__(self, cr):
         assert self.notify.debugStateCall(self)
-        DistributedObject.__init__(self, cr)
-        self.parentId = 0
-        self.zoneId = 0
 
+        DistributedObject.__init__(self, cr)
+
+        self.parentId = 0
+
+        self.zoneId = 0

@@ -1,12 +1,11 @@
 from direct.distributed.CachedDOData import CachedDOData
 from panda3d.core import ConfigVariableInt
 
-
 __all__ = ["CRDataCache"]
+
 
 class CRDataCache:
     # Stores cached data for DistributedObjects between instantiations on the client
-
     def __init__(self):
         self._doId2name2data = {}
         # maximum # of objects we will cache data for
@@ -30,7 +29,6 @@ class CRDataCache:
             for name in self._doId2name2data[junkDoId]:
                 self._doId2name2data[junkDoId][name].flush()
             del self._doId2name2data[junkDoId]
-
         self._doId2name2data.setdefault(doId, {})
         cachedData = self._doId2name2data[doId].get(name)
         if cachedData:
@@ -64,22 +62,25 @@ class CRDataCache:
         def _checkMemLeaks(self):
             assert self._len == len(self._doId2name2data)
 
+
 if __debug__:
     class TestCachedData(CachedDOData):
         def __init__(self):
             CachedDOData.__init__(self)
             self._destroyed = False
             self._flushed = False
+
         def destroy(self):
             CachedDOData.destroy(self)
             self._destroyed = True
+
         def flush(self):
             CachedDOData.flush(self)
             self._flushed = True
 
+
     dc = CRDataCache()
     dc._startMemLeakCheck()
-
     cd = CachedDOData()
     cd.foo = 34
     dc.setCachedData(1, 'testCachedData', cd)
@@ -98,11 +99,10 @@ if __debug__:
     assert 'testCachedData2' in data
     assert data['testCachedData'].foo == 34
     assert data['testCachedData2'].bar == 45
-    for cd in data.values():
+    for cd in list(data.values()):
         cd.flush()
     del data
     dc._checkMemLeaks()
-
     cd = CachedDOData()
     cd.bar = 1234
     dc.setCachedData(43, 'testCachedData2', cd)
@@ -110,8 +110,6 @@ if __debug__:
     assert dc.hasCachedData(43)
     dc.flush()
     dc._checkMemLeaks()
-
     dc._stopMemLeakCheck()
     dc.destroy()
     del dc
-

@@ -1,19 +1,21 @@
+import gc
+import inspect
+
+from direct.directnotify.DirectNotifyGlobal import directNotify
+from direct.distributed.DoCollectionManager import DoCollectionManager
+from direct.distributed.DoInterestManager import DoInterestManager
+from direct.showbase import GarbageReport
+from direct.task import Task
 from panda3d.core import *
 from panda3d.direct import *
-from direct.task import Task
-from direct.directnotify.DirectNotifyGlobal import directNotify
-from direct.distributed.DoInterestManager import DoInterestManager
-from direct.distributed.DoCollectionManager import DoCollectionManager
-from direct.showbase import GarbageReport
-from .PyDatagramIterator import PyDatagramIterator
 
-import inspect
-import gc
+from .PyDatagramIterator import PyDatagramIterator
 
 __all__ = ["ConnectionRepository", "GCTrigger"]
 
+
 class ConnectionRepository(
-        DoInterestManager, DoCollectionManager, CConnectionRepository):
+    DoInterestManager, DoCollectionManager, CConnectionRepository):
     """
     This is a base class for things that know how to establish a
     connection (and exchange datagrams) with a gameserver.  This
@@ -22,13 +24,10 @@ class ConnectionRepository(
     notify = directNotify.newCategory("ConnectionRepository")
     taskPriority = -30
     taskChain = None
-
-    CM_HTTP=0
-    CM_NET=1
-    CM_NATIVE=2
-
+    CM_HTTP = 0
+    CM_NET = 1
+    CM_NATIVE = 2
     gcNotify = directNotify.newCategory("GarbageCollect")
-
     GarbageCollectTaskName = "allowGarbageCollect"
     GarbageThresholdTaskName = "adjustGarbageCollectThreshold"
 
@@ -38,7 +37,6 @@ class ConnectionRepository(
         if threadedNet is None:
             # Default value.
             threadedNet = config.GetBool('threaded-net', False)
-
         # let the C connection repository know whether we're supporting
         # 'owner' views of distributed objects (i.e. 'receives ownrecv',
         # 'I own this object and have a separate view of it regardless of
@@ -50,21 +48,16 @@ class ConnectionRepository(
         DoInterestManager.__init__(self)
         DoCollectionManager.__init__(self)
         self.setPythonRepository(self)
-
         # Create a unique ID number for each ConnectionRepository in
         # the world, helpful for sending messages specific to each one.
         self.uniqueId = hash(self)
-
         # Accept this hook so that we can respond to lost-connection
         # events in the main thread, instead of within the network
         # thread (if there is one).
         self.accept(self._getLostConnectionEvent(), self.lostConnection)
-
         self.config = config
-
         if self.config.GetBool('verbose-repository'):
             self.setVerbose(1)
-
         # Set this to 'http' to establish a connection to the server
         # using the HTTPClient interface, which ultimately uses the
         # OpenSSL socket library (even though SSL is not involved).
@@ -94,7 +87,6 @@ class ConnectionRepository(
             connectMethod = self.CM_NET
         elif userConnectMethod == 'native':
             connectMethod = self.CM_NATIVE
-
         self.connectMethod = connectMethod
         if self.connectMethod == self.CM_HTTP:
             self.notify.info("Using connect method 'http'")
@@ -102,23 +94,17 @@ class ConnectionRepository(
             self.notify.info("Using connect method 'net'")
         elif self.connectMethod == self.CM_NATIVE:
             self.notify.info("Using connect method 'native'")
-
         self.connectHttp = None
         self.http = None
-
         # This DatagramIterator is constructed once, and then re-used
         # each time we read a datagram.
         self.private__di = PyDatagramIterator()
-
         self.recorder = None
         self.readerPollTaskObj = None
-
         # This is the string that is appended to symbols read from the
         # DC file.  The AIRepository will redefine this to 'AI'.
         self.dcSuffix = ''
-
         self._serverAddress = ''
-
         if self.config.GetBool('gc-save-all', 1):
             # set gc to preserve every object involved in a cycle, even ones that
             # would normally be freed automatically during garbage collect
@@ -126,20 +112,18 @@ class ConnectionRepository(
             # need to run garbage collects
             # garbage collection CPU usage is O(n), n = number of Python objects
             gc.set_debug(gc.DEBUG_SAVEALL)
-
         if self.config.GetBool('want-garbage-collect-task', 1):
             # manual garbage-collect task
             taskMgr.add(self._garbageCollect, self.GarbageCollectTaskName, 200)
             # periodically increase gc threshold if there is no garbage
             taskMgr.doMethodLater(self.config.GetFloat('garbage-threshold-adjust-delay', 5 * 60.),
                                   self._adjustGcThreshold, self.GarbageThresholdTaskName)
-
         self._gcDefaultThreshold = gc.get_threshold()
 
     def _getLostConnectionEvent(self):
         return self.uniqueName('lostConnection')
 
-    def _garbageCollect(self, task=None):
+    def _garbageCollect(self, task = None):
         # allow a collect
         # enable automatic garbage collection
         gc.enable()
@@ -159,19 +143,16 @@ class ConnectionRepository(
             self.gcNotify.debug('no garbage found, doubling gc threshold')
             a, b, c = gc.get_threshold()
             gc.set_threshold(min(a * 2, 1 << 30), b, c)
-
             task.delayTime = task.delayTime * 2
             retVal = Task.again
-
         else:
             self.gcNotify.warning('garbage found, reverting gc threshold')
             # the process is producing garbage, stick to the default collection threshold
             gc.set_threshold(*self._gcDefaultThreshold)
             retVal = Task.done
-
         return retVal
 
-    def generateGlobalObject(self, doId, dcname, values=None):
+    def generateGlobalObject(self, doId, dcname, values = None):
         def applyFieldValues(distObj, dclass, values):
             for i in range(dclass.getNumInheritedFields()):
                 field = dclass.getInheritedField(i)
@@ -183,39 +164,40 @@ class ConnectionRepository(
                         # or similar, but that returns a binary string, not
                         # a python tuple, like the following does.  If you
                         # want to change something better, please go ahead.
+                        print(field)
                         packer = DCPacker()
                         packer.beginPack(field)
                         packer.packDefaultValue()
                         packer.endPack()
-
                         unpacker = DCPacker()
                         unpacker.setUnpackData(packer.getString())
                         unpacker.beginUnpack(field)
                         value = unpacker.unpackObject()
+                        print(value)
                         unpacker.endUnpack()
                     if value is not None:
                         function = getattr(distObj, field.getName())
                         if function is not None:
                             function(*value)
                         else:
-                            self.notify.error("\n\n\nNot able to find %s.%s"%(
+                            self.notify.error("\n\n\nNot able to find %s.%s" % (
                                 distObj.__class__.__name__, field.getName()))
 
         # Look up the dclass
-        dclass = self.dclassesByName.get(dcname+self.dcSuffix)
+        print(dcname)
+        dclass = self.dclassesByName.get(dcname + self.dcSuffix)
         if dclass is None:
-            #print "\n\n\nNeed to define", dcname+self.dcSuffix
-            self.notify.warning("Need to define %s" % (dcname+self.dcSuffix))
-            dclass = self.dclassesByName.get(dcname+'AI')
+            # print "\n\n\nNeed to define", dcname+self.dcSuffix
+            self.notify.warning("Need to define %s" % (dcname + self.dcSuffix))
+            dclass = self.dclassesByName.get(dcname + 'AI')
         if dclass is None:
             dclass = self.dclassesByName.get(dcname)
         # Create a new distributed object, and put it in the dictionary
-        #distObj = self.generateWithRequiredFields(dclass, doId, di)
-
+        # distObj = self.generateWithRequiredFields(dclass, doId, di)
         # Construct a new one
         classDef = dclass.getClassDef()
         if classDef == None:
-            self.notify.error("Could not create an undefined %s object."%(
+            self.notify.error("Could not create an undefined %s object." % (
                 dclass.getName()))
         distObj = classDef(self)
         distObj.dclass = dclass
@@ -232,7 +214,7 @@ class ConnectionRepository(
         distObj.parentId = 0
         distObj.zoneId = 0
         # updateRequiredFields calls announceGenerate
-        return  distObj
+        return distObj
 
     def readDCFile(self, dcFileNames = None):
         """
@@ -240,17 +222,14 @@ class ConnectionRepository(
         dcFileNames is None, reads in all of the dc files listed in
         the Config.prc file.
         """
-
         dcFile = self.getDcFile()
         dcFile.clear()
         self.dclassesByName = {}
         self.dclassesByNumber = {}
         self.hashVal = 0
-
         if isinstance(dcFileNames, str):
             # If we were given a single string, make it a list.
             dcFileNames = [dcFileNames]
-
         dcImports = {}
         if dcFileNames == None:
             readResult = dcFile.readAll()
@@ -264,8 +243,7 @@ class ConnectionRepository(
                 readResult = dcFile.read(pathname)
                 if not readResult:
                     self.notify.error("Could not read dc file: %s" % (pathname))
-
-        #if not dcFile.allObjectsValid():
+        # if not dcFile.allObjectsValid():
         #    names = []
         #    for i in range(dcFile.getNumTypedefs()):
         #        td = dcFile.getTypedef(i)
@@ -273,53 +251,43 @@ class ConnectionRepository(
         #            names.append(td.getName())
         #    nameList = ', '.join(names)
         #    self.notify.error("Undefined types in DC file: " + nameList)
-
         self.hashVal = dcFile.getHash()
-
         # Now import all of the modules required by the DC file.
         for n in range(dcFile.getNumImportModules()):
             moduleName = dcFile.getImportModule(n)[:]
-
             # Maybe the module name is represented as "moduleName/AI".
             suffix = moduleName.split('/')
             moduleName = suffix[0]
-            suffix=suffix[1:]
+            suffix = suffix[1:]
             if self.dcSuffix in suffix:
                 moduleName += self.dcSuffix
-            elif self.dcSuffix == 'UD' and 'AI' in suffix: #HACK:
+            elif self.dcSuffix == 'UD' and 'AI' in suffix:  # HACK:
                 moduleName += 'AI'
-
             importSymbols = []
             for i in range(dcFile.getNumImportSymbols(n)):
                 symbolName = dcFile.getImportSymbol(n, i)
-
                 # Maybe the symbol name is represented as "symbolName/AI".
                 suffix = symbolName.split('/')
                 symbolName = suffix[0]
-                suffix=suffix[1:]
+                suffix = suffix[1:]
                 if self.dcSuffix in suffix:
                     symbolName += self.dcSuffix
-                elif self.dcSuffix == 'UD' and 'AI' in suffix: #HACK:
+                elif self.dcSuffix == 'UD' and 'AI' in suffix:  # HACK:
                     symbolName += 'AI'
-
                 importSymbols.append(symbolName)
-
             self.importModule(dcImports, moduleName, importSymbols)
-
         # Now get the class definition for the classes named in the DC
         # file.
         for i in range(dcFile.getNumClasses()):
             dclass = dcFile.getClass(i)
             number = dclass.getNumber()
             className = dclass.getName() + self.dcSuffix
-
             # Does the class have a definition defined in the newly
             # imported namespace?
             classDef = dcImports.get(className)
-            if classDef is None and self.dcSuffix == 'UD': #HACK:
+            if classDef is None and self.dcSuffix == 'UD':  # HACK:
                 className = dclass.getName() + 'AI'
                 classDef = dcImports.get(className)
-
             # Also try it without the dcSuffix.
             if classDef == None:
                 className = dclass.getName()
@@ -332,56 +300,46 @@ class ConnectionRepository(
                         self.notify.warning("Module %s does not define class %s." % (className, className))
                         continue
                     classDef = getattr(classDef, className)
-
                 if not inspect.isclass(classDef):
                     self.notify.error("Symbol %s is not a class name." % (className))
                 else:
                     dclass.setClassDef(classDef)
-
             self.dclassesByName[className] = dclass
             if number >= 0:
                 self.dclassesByNumber[number] = dclass
-
         # Owner Views
         if self.hasOwnerView():
             ownerDcSuffix = self.dcSuffix + 'OV'
             # dict of class names (without 'OV') that have owner views
             ownerImportSymbols = {}
-
             # Now import all of the modules required by the DC file.
             for n in range(dcFile.getNumImportModules()):
                 moduleName = dcFile.getImportModule(n)
-
                 # Maybe the module name is represented as "moduleName/AI".
                 suffix = moduleName.split('/')
                 moduleName = suffix[0]
-                suffix=suffix[1:]
+                suffix = suffix[1:]
                 if ownerDcSuffix in suffix:
                     moduleName = moduleName + ownerDcSuffix
-
                 importSymbols = []
                 for i in range(dcFile.getNumImportSymbols(n)):
                     symbolName = dcFile.getImportSymbol(n, i)
-
                     # Check for the OV suffix
                     suffix = symbolName.split('/')
                     symbolName = suffix[0]
-                    suffix=suffix[1:]
+                    suffix = suffix[1:]
                     if ownerDcSuffix in suffix:
                         symbolName += ownerDcSuffix
                     importSymbols.append(symbolName)
                     ownerImportSymbols[symbolName] = None
-
                 self.importModule(dcImports, moduleName, importSymbols)
-
             # Now get the class definition for the owner classes named
             # in the DC file.
             for i in range(dcFile.getNumClasses()):
                 dclass = dcFile.getClass(i)
-                if ((dclass.getName()+ownerDcSuffix) in ownerImportSymbols):
+                if ((dclass.getName() + ownerDcSuffix) in ownerImportSymbols):
                     number = dclass.getNumber()
                     className = dclass.getName() + ownerDcSuffix
-
                     # Does the class have a definition defined in the newly
                     # imported namespace?
                     classDef = dcImports.get(className)
@@ -402,7 +360,6 @@ class ConnectionRepository(
         the Python import command.
         """
         module = __import__(moduleName, globals(), locals(), importSymbols)
-
         if importSymbols:
             # "from moduleName import symbolName, symbolName, ..."
             # Copy just the named symbols into the dictionary.
@@ -411,8 +368,7 @@ class ConnectionRepository(
                 if hasattr(module, "__all__"):
                     importSymbols = module.__all__
                 else:
-                    importSymbols = module.__dict__.keys()
-
+                    importSymbols = list(module.__dict__.keys())
             for symbolName in importSymbols:
                 if hasattr(module, symbolName):
                     dcImports[symbolName] = getattr(module, symbolName)
@@ -420,9 +376,7 @@ class ConnectionRepository(
                     raise Exception('Symbol %s not defined in module %s.' % (symbolName, moduleName))
         else:
             # "import moduleName"
-
             # Copy the root module name into the dictionary.
-
             # Follow the dotted chain down to the actual module.
             components = moduleName.split('.')
             dcImports[components[0]] = module
@@ -442,35 +396,27 @@ class ConnectionRepository(
         the return status code giving reason for failure, if it is
         known.
         """
-
         ## if self.recorder and self.recorder.isPlaying():
-
         ##     # If we have a recorder and it's already in playback mode,
         ##     # don't actually attempt to connect to a gameserver since
         ##     # we don't need to.  Just let it play back the data.
         ##     self.notify.info("Not connecting to gameserver; using playback data instead.")
-
         ##     self.connectHttp = 1
         ##     self.tcpConn = SocketStreamRecorder()
         ##     self.recorder.addRecorder('gameserver', self.tcpConn)
-
         ##     self.startReaderPollTask()
         ##     if successCallback:
         ##         successCallback(*successArgs)
         ##     return
-
         hasProxy = 0
         if self.checkHttp():
             proxies = self.http.getProxiesForUrl(serverList[0])
             hasProxy = (proxies != 'DIRECT')
-
         if hasProxy:
             self.notify.info("Connecting to gameserver via proxy list: %s" % (proxies))
         else:
             self.notify.info("Connecting to gameserver directly (no proxy).")
-
-        #Redefine the connection to http or net in the default case
-
+        # Redefine the connection to http or net in the default case
         self.bootedIndex = None
         self.bootedText = None
         if self.connectMethod == self.CM_HTTP:
@@ -481,13 +427,12 @@ class ConnectionRepository(
             # rolling by calling the connect callback, which will call
             # itself repeatedly until we establish a connection (or
             # run out of servers).
-
             ch = self.http.makeChannel(0)
             self.httpConnectCallback(
-                    ch, serverList, 0,
-                    successCallback, successArgs,
-                    failureCallback, failureArgs)
-        elif self.connectMethod == self.CM_NET or (not hasattr(self,"connectNative")):
+                ch, serverList, 0,
+                successCallback, successArgs,
+                failureCallback, failureArgs)
+        elif self.connectMethod == self.CM_NET or (not hasattr(self, "connectNative")):
             # Try each of the servers in turn.
             for url in serverList:
                 self.notify.info("Connecting to %s via NET interface." % (url))
@@ -496,7 +441,6 @@ class ConnectionRepository(
                     if successCallback:
                         successCallback(*successArgs)
                     return
-
             # Failed to connect.
             if failureCallback:
                 failureCallback(0, '', *failureArgs)
@@ -508,7 +452,6 @@ class ConnectionRepository(
                     if successCallback:
                         successCallback(*successArgs)
                     return
-
             # Failed to connect.
             if failureCallback:
                 failureCallback(0, '', *failureArgs)
@@ -534,9 +477,8 @@ class ConnectionRepository(
                             failureCallback, failureArgs):
         if ch.isConnectionReady():
             self.setConnectionHttp(ch)
-            self._serverAddress = serverList[serverIndex-1]
+            self._serverAddress = serverList[serverIndex - 1]
             self.notify.info("Successfully connected to %s." % (self._serverAddress))
-
             ## if self.recorder:
             ##     # If we have a recorder, we wrap the connect inside a
             ##     # SocketStreamRecorder, which will trap incoming data
@@ -548,22 +490,18 @@ class ConnectionRepository(
             ##     # the gameserver.)
             ##     stream = SocketStreamRecorder(self.tcpConn, 1)
             ##     self.recorder.addRecorder('gameserver', stream)
-
             ##     # In this case, we pass ownership of the original
             ##     # connection to the SocketStreamRecorder object.
             ##     self.tcpConn.userManagesMemory = 0
             ##     self.tcpConn = stream
-
             self.startReaderPollTask()
             if successCallback:
                 successCallback(*successArgs)
         elif serverIndex < len(serverList):
             # No connection yet, but keep trying.
-
             url = serverList[serverIndex]
             self.notify.info("Connecting to %s via HTTP interface." % (url))
             ch.preserveStatus()
-
             ch.beginConnectTo(DocumentSpec(url))
             ch.spawnTask(name = 'connect-to-server',
                          callback = self.httpConnectCallback,
@@ -581,13 +519,11 @@ class ConnectionRepository(
         # already.  This might fail if the OpenSSL library isn't
         # available.  Returns the HTTPClient (also self.http), or None
         # if not set.
-
         if self.http == None:
             try:
                 self.http = HTTPClient()
             except:
                 pass
-
         return self.http
 
     def startReaderPollTask(self):
@@ -615,7 +551,6 @@ class ConnectionRepository(
             self.getDatagramIterator(self.private__di)
             self.handleDatagram(self.private__di)
             return 1
-
         # Unable to receive a datagram: did we lose the connection?
         if not self.isConnected():
             self.stopReaderPollTask()
@@ -641,10 +576,9 @@ class ConnectionRepository(
         # Zero-length datagrams might freak out the server.  No point
         # in sending them, anyway.
         if datagram.getLength() > 0:
-##             if self.notify.getDebug():
-##                 print "ConnectionRepository sending datagram:"
-##                 datagram.dumpHex(ostream)
-
+            ##             if self.notify.getDebug():
+            ##                 print "ConnectionRepository sending datagram:"
+            ##                 datagram.dumpHex(ostream)
             self.sendDatagram(datagram)
 
     # debugging funcs for simulating a network-plug-pull
@@ -662,6 +596,7 @@ class ConnectionRepository(
 
     def uniqueName(self, idString):
         return ("%s-%s" % (idString, self.uniqueId))
+
 
 class GCTrigger:
     # used to trigger garbage collection

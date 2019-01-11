@@ -1,10 +1,10 @@
-
-from panda3d.core import *
-from panda3d.direct import *
 from direct.directnotify.DirectNotifyGlobal import directNotify
+
 from direct.task import Task
-from .DistributedNodeAI import DistributedNodeAI
+
 from .CartesianGridBase import CartesianGridBase
+from .DistributedNodeAI import DistributedNodeAI
+
 
 class DistributedCartesianGridAI(DistributedNodeAI, CartesianGridBase):
     notify = directNotify.newCategory("DistributedCartesianGridAI")
@@ -12,20 +12,27 @@ class DistributedCartesianGridAI(DistributedNodeAI, CartesianGridBase):
     RuleSeparator = ":"
 
     def __init__(self, air, startingZone, gridSize, gridRadius, cellWidth,
-            style="Cartesian"):
+                 style = "Cartesian"):
         DistributedNodeAI.__init__(self, air)
+
         self.style = style
+
         self.startingZone = startingZone
+
         self.gridSize = gridSize
+
         self.gridRadius = gridRadius
+
         self.cellWidth = cellWidth
 
         # Keep track of all AI objects added to the grid
         self.gridObjects = {}
+
         self.updateTaskStarted = 0
 
     def delete(self):
         DistributedNodeAI.delete(self)
+
         self.stopUpdateGridTask()
 
     def isGridParent(self):
@@ -38,19 +45,22 @@ class DistributedCartesianGridAI(DistributedNodeAI, CartesianGridBase):
 
     def getParentingRules(self):
         self.notify.debug("calling getter")
+
         rule = ("%i%s%i%s%i" % (self.startingZone, self.RuleSeparator,
                                 self.gridSize, self.RuleSeparator,
                                 self.gridRadius))
+
         return [self.style, rule]
 
     # Reparent and setLocation on av to DistributedOceanGrid
-    def addObjectToGrid(self, av, useZoneId=-1, startAutoUpdate=True):
+    def addObjectToGrid(self, av, useZoneId = -1, startAutoUpdate = True):
         self.notify.debug("setting parent to grid %s" % self)
+
         avId = av.doId
 
         # Create a grid parent
-        #gridParent = self.attachNewNode("gridParent-%s" % avId)
-        #self.gridParents[avId] = gridParent
+        # gridParent = self.attachNewNode("gridParent-%s" % avId)
+        # self.gridParents[avId] = gridParent
         self.gridObjects[avId] = av
 
         # Put the avatar on the grid
@@ -61,11 +71,11 @@ class DistributedCartesianGridAI(DistributedNodeAI, CartesianGridBase):
 
     def removeObjectFromGrid(self, av):
         # TODO: WHAT LOCATION SHOULD WE SET THIS TO?
-        #av.wrtReparentTo(self.parentNP)
-        #av.setLocation(self.air.districtId, 1000)
-
+        # av.wrtReparentTo(self.parentNP)
+        # av.setLocation(self.air.districtId, 1000)
         # Remove grid parent for this av
         avId = av.doId
+
         if avId in self.gridObjects:
             del self.gridObjects[avId]
 
@@ -84,51 +94,65 @@ class DistributedCartesianGridAI(DistributedNodeAI, CartesianGridBase):
     #    gridParent.  This makes the task's math easy.  Just check to see
     #    when our position goes out of the current grid cell.  When it does,
     #    call handleAvatarZoneChange
-
     def startUpdateGridTask(self):
         self.stopUpdateGridTask()
+
         self.updateTaskStarted = 1
+
         taskMgr.add(self.updateGridTask, self.taskName("updateGridTask"))
 
     def stopUpdateGridTask(self):
         taskMgr.remove(self.taskName("updateGridTask"))
+
         self.updateTaskStarted = 0
 
-    def updateGridTask(self, task=None):
+    def updateGridTask(self, task = None):
         # Run through all grid objects and update their parents if needed
         missingObjs = []
-        for avId in self.gridObjects.keys():
+
+        for avId in list(self.gridObjects.keys()):
             av = self.gridObjects[avId]
+
             # handle a missing object after it is already gone?
             if (av.isEmpty()):
                 task.setDelay(1.0)
+
                 del self.gridObjects[avId]
+
                 continue
+
             pos = av.getPos()
+
             if ((pos[0] < 0 or pos[1] < 0) or
-                (pos[0] > self.cellWidth or pos[1] > self.cellWidth)):
+                    (pos[0] > self.cellWidth or pos[1] > self.cellWidth)):
                 # we are out of the bounds of this current cell
                 self.handleAvatarZoneChange(av)
+
         # Do this every second, not every frame
         if (task):
             task.setDelay(1.0)
+
         return Task.again
 
-    def handleAvatarZoneChange(self, av, useZoneId=-1):
+    def handleAvatarZoneChange(self, av, useZoneId = -1):
         # Calculate zone id
         # Get position of av relative to this grid
         if (useZoneId == -1):
             pos = av.getPos(self)
+
             zoneId = self.getZoneFromXYZ(pos)
+
         else:
             # zone already calculated, position of object might not
             # give the correct zone
             pos = None
+
             zoneId = useZoneId
 
         if not self.isValidZone(zoneId):
             self.notify.warning(
-                "%s handleAvatarZoneChange %s: not a valid zone (%s) for pos %s" %(self.doId, av.doId, zoneId, pos))
+                "%s handleAvatarZoneChange %s: not a valid zone (%s) for pos %s" % (self.doId, av.doId, zoneId, pos))
+
             return
 
         # Set the location on the server.
@@ -137,9 +161,8 @@ class DistributedCartesianGridAI(DistributedNodeAI, CartesianGridBase):
 
     def handleSetLocation(self, av, parentId, zoneId):
         pass
-        #if (av.parentId != parentId):
-            # parent changed, need to look up instance tree
-            # to see if avatar's named area location information
-            # changed
-            #av.requestRegionUpdateTask(regionegionUid)
-
+        # if (av.parentId != parentId):
+        # parent changed, need to look up instance tree
+        # to see if avatar's named area location information
+        # changed
+        # av.requestRegionUpdateTask(regionegionUid)

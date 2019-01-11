@@ -1,6 +1,6 @@
-from direct.distributed.ClockDelta import *
-from pandac.PandaModules import *
 from direct.distributed import DistributedObjectAI
+from direct.distributed.ClockDelta import *
+
 
 class TimeManagerAI(DistributedObjectAI.DistributedObjectAI):
     notify = DirectNotifyGlobal.directNotify.newCategory("TimeManagerAI")
@@ -16,8 +16,12 @@ class TimeManagerAI(DistributedObjectAI.DistributedObjectAI):
         with its current time.  The client will then measure the round
         trip.
         """
-        timestamp = globalClockDelta.getRealNetworkTime(bits=32)
+
+        timestamp = globalClockDelta.getRealNetworkTime(bits = 32)
+
         requesterId = self.air.getAvatarIdFromSender()
-        print("requestServerTime from %s" % (requesterId))
+
+        print(("requestServerTime from %s" % (requesterId)))
+
         self.sendUpdateToAvatarId(requesterId, "serverTime",
                                   [context, timestamp])
