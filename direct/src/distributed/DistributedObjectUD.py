@@ -1,41 +1,30 @@
 """DistributedObjectUD module: contains the DistributedObjectUD class"""
 
 from direct.directnotify.DirectNotifyGlobal import directNotify
-
 from direct.distributed.DistributedObjectBase import DistributedObjectBase
-
 from direct.showbase import PythonUtil
-
-
-# from PyDatagram import PyDatagram
-
-# from PyDatagramIterator import PyDatagramIterator
-
+from pandac.PandaModules import *
+#from PyDatagram import PyDatagram
+#from PyDatagramIterator import PyDatagramIterator
 
 class DistributedObjectUD(DistributedObjectBase):
     notify = directNotify.newCategory("DistributedObjectUD")
-
     QuietZone = 1
 
     def __init__(self, air):
         try:
             self.DistributedObjectUD_initialized
-
         except:
             self.DistributedObjectUD_initialized = 1
-
             DistributedObjectBase.__init__(self, air)
 
             self.accountName = ''
-
             # Record the repository
             self.air = air
 
             # Record our distributed class
             className = self.__class__.__name__
-
             self.dclass = self.air.dclassesByName[className]
-
             # init doId pre-allocated flag
             self.__preallocDoId = 0
 
@@ -48,84 +37,65 @@ class DistributedObjectUD(DistributedObjectBase):
 
             # These are used to implement beginBarrier().
             self.__nextBarrierContext = 0
-
             self.__barriers = {}
 
             self.__generated = False
-
             # reference count for multiple inheritance
             self.__generates = 0
 
     # Uncomment if you want to debug DO leaks
-    # def __del__(self):
+    #def __del__(self):
     #    """
     #    For debugging purposes, this just prints out what got deleted
     #    """
     #    print ("Destructing: " + self.__class__.__name__)
+
     if __debug__:
-        def status(self, indent = 0):
+        def status(self, indent=0):
             """
-
             print out doId(parentId, zoneId) className
-
                 and conditionally show generated or deleted
-
             """
-
             spaces = ' ' * (indent + 2)
-
             try:
-                print(("%s%s:" % (' ' * indent, self.__class__.__name__)))
+                print("%s%s:" % (' ' * indent, self.__class__.__name__))
 
                 flags = []
-
                 if self.__generated:
                     flags.append("generated")
-
                 if self.air == None:
                     flags.append("deleted")
 
                 flagStr = ""
-
                 if len(flags):
                     flagStr = " (%s)" % (" ".join(flags))
 
-                print(("%sfrom DistributedObject doId:%s, parent:%s, zone:%s%s" % (
-                    spaces, self.doId, self.parentId, self.zoneId, flagStr)))
-
+                print("%sfrom DistributedObject doId:%s, parent:%s, zone:%s%s" % (
+                    spaces, self.doId, self.parentId, self.zoneId, flagStr))
             except Exception as e:
-                print(("%serror printing status %s" % (spaces, e)))
+                print("%serror printing status %s" % (spaces, e))
 
     def getDeleteEvent(self):
         # this is sent just before we get deleted
         if hasattr(self, 'doId'):
             return 'distObjDelete-%s' % self.doId
-
         return None
 
     def sendDeleteEvent(self):
         # this is called just before we get deleted
         delEvent = self.getDeleteEvent()
-
         if delEvent:
             messenger.send(delEvent)
 
     def delete(self):
         """
-
         Inheritors should redefine this to take appropriate action on delete
-
         Note that this may be called multiple times if a class inherits
-
         from DistributedObjectUD more than once.
-
         """
-
         self.__generates -= 1
-
         if self.__generates < 0:
             self.notify.debug('DistributedObjectUD: delete() called more times than generate()')
-
         if self.__generates == 0:
             # prevent this code from executing multiple times
             if self.air is not None:
@@ -138,115 +108,78 @@ class DistributedObjectUD(DistributedObjectBase):
                     # that we did not create. We need to add a 'locally created'
                     # flag to every object to filter these out.
                     """
-
                     DistributedObjectUD.notify.warning(
-
                         'delete() called but requestDelete never called for %s: %s'
-
                         % (self.__dict__.get('doId'), self.__class__.__name__))
-
                         """
-
                     """
-
                     # print a stack trace so we can detect whether this is the
-
                     # result of a network msg.
-
                     # this is slow.
-
                     from direct.showbase.PythonUtil import StackTrace
-
                     DistributedObjectUD.notify.warning(
-
                         'stack trace: %s' % StackTrace())
-
                         """
-
                 self._DOUD_requestedDelete = False
 
                 # Clean up all the pending barriers.
-                for barrier in list(self.__barriers.values()):
+                for barrier in self.__barriers.values():
                     barrier.cleanup()
-
                 self.__barriers = {}
 
                 # Asad: As per Roger's suggestion, turn off the following block until a solution is
                 # Thought out of how to prevent this delete message or to handle this message better
-                ##              if not hasattr(self, "doNotDeallocateChannel"):
-                ##                  if self.air:
-                ##                      self.air.deallocateChannel(self.doId)
-                ##              self.air = None
+##              if not hasattr(self, "doNotDeallocateChannel"):
+##                  if self.air:
+##                      self.air.deallocateChannel(self.doId)
+##              self.air = None
                 self.parentId = None
-
                 self.zoneId = None
-
                 self.__generated = False
 
     def isDeleted(self):
         """
-
         Returns true if the object has been deleted,
-
         or if it is brand new and hasnt yet been generated.
-
         """
-
         return self.air == None
 
     def isGenerated(self):
         """
-
         Returns true if the object has been generated
-
         """
-
         return self.__generated
 
     def getDoId(self):
         """
-
         Return the distributed object id
-
         """
-
         return self.doId
 
     def preAllocateDoId(self):
         """
-
         objects that need to have a doId before they are generated
-
         can call this to pre-allocate a doId for the object
-
         """
-
         assert not self.__preallocDoId
-
         self.doId = self.air.allocateChannel()
-
         self.__preallocDoId = 1
 
     def announceGenerate(self):
         """
-
         Called after the object has been generated and all
-
         of its required fields filled in. Overwrite when needed.
-
         """
-
         self.__generated = True
 
     def postGenerateMessage(self):
         messenger.send(self.uniqueName("generate"), [self])
 
-    def addInterest(self, zoneId, note = "", event = None):
+    def addInterest(self, zoneId, note="", event=None):
         self.air.addInterest(self.getDoId(), zoneId, note, event)
 
     def b_setLocation(self, parentId, zoneId):
         self.d_setLocation(parentId, zoneId)
-
         self.setLocation(parentId, zoneId)
 
     def d_setLocation(self, parentId, zoneId):
@@ -259,48 +192,37 @@ class DistributedObjectUD(DistributedObjectBase):
         try:
             if self.parentId <= 0 and self.zoneId <= 0:
                 return None
-
             # This is a -1 stuffed into a uint32
             if self.parentId == 0xffffffff and self.zoneId == 0xffffffff:
                 return None
-
             return (self.parentId, self.zoneId)
-
         except AttributeError:
             return None
 
     def updateRequiredFields(self, dclass, di):
         dclass.receiveUpdateBroadcastRequired(self, di)
-
         self.announceGenerate()
-
         self.postGenerateMessage()
 
     def updateAllRequiredFields(self, dclass, di):
         dclass.receiveUpdateAllRequired(self, di)
-
         self.announceGenerate()
-
         self.postGenerateMessage()
 
     def updateRequiredOtherFields(self, dclass, di):
         dclass.receiveUpdateBroadcastRequired(self, di)
-
         # Announce generate after updating all the required fields,
         # but before we update the non-required fields.
         self.announceGenerate()
-
         self.postGenerateMessage()
 
         dclass.receiveUpdateOther(self, di)
 
     def updateAllRequiredOtherFields(self, dclass, di):
         dclass.receiveUpdateAllRequired(self, di)
-
         # Announce generate after updating all the required fields,
         # but before we update the non-required fields.
         self.announceGenerate()
-
         self.postGenerateMessage()
 
         dclass.receiveUpdateOther(self, di)
@@ -323,11 +245,8 @@ class DistributedObjectUD(DistributedObjectBase):
 
     def handleLogicalZoneChange(self, newZoneId, oldZoneId):
         """this function gets called as if we never go through the
-
         quiet zone. Note that it is called once you reach the newZone,
-
         and not at the time that you leave the oldZone."""
-
         messenger.send(self.getLogicalZoneChangeEvent(),
                        [newZoneId, oldZoneId])
 
@@ -346,7 +265,6 @@ class DistributedObjectUD(DistributedObjectBase):
 
     def sendUpdate(self, fieldName, args = []):
         assert self.notify.debugStateCall(self)
-
         if self.air:
             self.air.sendUpdate(self, fieldName, args)
 
@@ -364,88 +282,66 @@ class DistributedObjectUD(DistributedObjectBase):
 
     def sendUpdateToAvatarId(self, avId, fieldName, args):
         assert self.notify.debugStateCall(self)
-
         channelId = self.GetPuppetConnectionChannel(avId)
-
         self.sendUpdateToChannel(channelId, fieldName, args)
 
     def sendUpdateToAccountId(self, accountId, fieldName, args):
         assert self.notify.debugStateCall(self)
-
         channelId = self.GetAccountConnectionChannel(accountId)
-
         self.sendUpdateToChannel(channelId, fieldName, args)
 
     def sendUpdateToChannel(self, channelId, fieldName, args):
         assert self.notify.debugStateCall(self)
-
         if self.air:
             self.air.sendUpdateToChannel(self, channelId, fieldName, args)
 
-    def generateWithRequired(self, zoneId, optionalFields = []):
+    def generateWithRequired(self, zoneId, optionalFields=[]):
         assert self.notify.debugStateCall(self)
-
         # have we already allocated a doId?
         if self.__preallocDoId:
             self.__preallocDoId = 0
-
             return self.generateWithRequiredAndId(self.doId, zoneId,
                                                   optionalFields)
 
         # The repository is the one that really does the work
         parentId = self.air.districtId
-
         self.parentId = parentId
-
         self.zoneId = zoneId
-
         self.air.generateWithRequired(self, parentId, zoneId, optionalFields)
-
         self.generate()
 
     # this is a special generate used for estates, or anything else that
     # needs to have a hard coded doId as assigned by the server
-    def generateWithRequiredAndId(self, doId, parentId, zoneId, optionalFields = []):
+    def generateWithRequiredAndId(self, doId, parentId, zoneId, optionalFields=[]):
         assert self.notify.debugStateCall(self)
-
         # have we already allocated a doId?
         if self.__preallocDoId:
             assert doId == self.__preallocDoId
-
             self.__preallocDoId = 0
 
         # The repository is the one that really does the work
         self.air.generateWithRequiredAndId(self, doId, parentId, zoneId, optionalFields)
-
         ## self.parentId = parentId
         ## self.zoneId = zoneId
         self.generate()
-
         self.announceGenerate()
-
         self.postGenerateMessage()
 
-    def generateOtpObject(self, parentId, zoneId, optionalFields = [], doId = None):
+    def generateOtpObject(self, parentId, zoneId, optionalFields=[], doId=None):
         assert self.notify.debugStateCall(self)
-
         # have we already allocated a doId?
         if self.__preallocDoId:
             assert doId is None or doId == self.__preallocDoId
-
             doId = self.__preallocDoId
-
             self.__preallocDoId = 0
 
         # Assign it an id
         if doId is None:
             self.doId = self.air.allocateChannel()
-
         else:
             self.doId = doId
-
         # Put the new DO in the dictionaries
         self.air.addDOToTables(self, location = (parentId, zoneId))
-
         # Send a generate message
         self.sendGenerateWithRequired(self.air, parentId, zoneId, optionalFields)
 
@@ -456,81 +352,59 @@ class DistributedObjectUD(DistributedObjectBase):
 
     def generate(self):
         """
-
         Inheritors should put functions that require self.zoneId or
-
         other networked info in this function.
-
         """
-
         assert self.notify.debugStateCall(self)
-
         self.__generates += 1
-
         self.air.storeObjectLocation(self, self.parentId, self.zoneId)
 
-    def generateInit(self, repository = None):
+    def generateInit(self, repository=None):
         """
-
         First generate (not from cache).
-
         """
-
         assert self.notify.debugStateCall(self)
 
     def generateTargetChannel(self, repository):
         """
-
         Who to send this to for generate messages
-
         """
-
         if hasattr(self, "dbObject"):
             return self.doId
-
         return repository.serverId
 
-    def sendGenerateWithRequired(self, repository, parentId, zoneId, optionalFields = []):
+    def sendGenerateWithRequired(self, repository, parentId, zoneId, optionalFields=[]):
         assert self.notify.debugStateCall(self)
-
         dg = self.dclass.aiFormatGenerate(
             self, self.doId, parentId, zoneId,
-            # repository.serverId,
+            #repository.serverId,
             self.generateTargetChannel(repository),
             repository.ourChannel,
             optionalFields)
-
         repository.send(dg)
 
     def initFromServerResponse(self, valDict):
         assert self.notify.debugStateCall(self)
-
         # This is a special method used for estates, etc., which get
         # their fields set from the database indirectly by way of the
         # UD.  The input parameter is a dictionary of field names to
         # datagrams that describes the initial field values from the
         # database.
-        dclass = self.dclass
 
-        for key, value in list(valDict.items()):
+        dclass = self.dclass
+        for key, value in valDict.items():
             # Update the field
             dclass.directUpdate(self, key, value)
 
     def requestDelete(self):
         assert self.notify.debugStateCall(self)
-
         if not self.air:
             doId = "none"
-
             if hasattr(self, "doId"):
                 doId = self.doId
-
             self.notify.warning("Tried to delete a %s (doId %s) that is already deleted" % (self.__class__, doId))
-
             return
-
         self.air.requestDelete(self)
-
         self._DOUD_requestedDelete = True
 
     def taskName(self, taskString):
@@ -542,9 +416,7 @@ class DistributedObjectUD(DistributedObjectBase):
     def validate(self, avId, bool, msg):
         if not bool:
             self.air.writeServerEvent('suspicious', avId, msg)
-
             self.notify.warning('validate error: avId: %s -- %s' % (avId, msg))
-
         return bool
 
     def beginBarrier(self, name, avIds, timeout, callback):
@@ -554,9 +426,9 @@ class DistributedObjectUD(DistributedObjectBase):
         # made it through.  There may be multiple barriers waiting
         # simultaneously on different lists of avatars, although they
         # should have different names.
+
         from otp.ai import Barrier
         context = self.__nextBarrierContext
-
         # We assume the context number is passed as a uint16.
         self.__nextBarrierContext = (self.__nextBarrierContext + 1) & 0xffff
 
@@ -567,12 +439,10 @@ class DistributedObjectUD(DistributedObjectBase):
                 name, self.uniqueName(name), avIds, timeout,
                 doneFunc = PythonUtil.Functor(
                     self.__barrierCallback, context, callback))
-
             self.__barriers[context] = barrier
 
             # Send the context number to each involved client.
             self.sendUpdate("setBarrierData", [self.__getBarrierData()])
-
         else:
             # No avatars; just call the callback immediately.
             callback(avIds)
@@ -584,34 +454,26 @@ class DistributedObjectUD(DistributedObjectBase):
         # clients.  This lists all of the current outstanding barriers
         # and the avIds waiting for them.
         data = []
-
-        for context, barrier in list(self.__barriers.items()):
+        for context, barrier in self.__barriers.items():
             toons = barrier.pendingToons
-
             if toons:
                 data.append((context, barrier.name, toons))
-
         return data
 
     def ignoreBarrier(self, context):
         # Aborts a previously-set barrier.  The context is the return
         # value from the previous call to beginBarrier().
         barrier = self.__barriers.get(context)
-
         if barrier:
             barrier.cleanup()
-
             del self.__barriers[context]
 
     def setBarrierReady(self, context):
         # Generated by the clients to check in after a beginBarrier()
         # call.
         avId = self.air.getAvatarIdFromSender()
-
         assert self.notify.debug('setBarrierReady(%s, %s)' % (context, avId))
-
         barrier = self.__barriers.get(context)
-
         if barrier == None:
             # This may be None if a client was slow and missed an
             # earlier timeout.  Too bad.
@@ -621,17 +483,12 @@ class DistributedObjectUD(DistributedObjectBase):
 
     def __barrierCallback(self, context, callback, avIds):
         assert self.notify.debug('barrierCallback(%s, %s)' % (context, avIds))
-
         # The callback that is generated when a barrier is completed.
         barrier = self.__barriers.get(context)
-
         if barrier:
             barrier.cleanup()
-
             del self.__barriers[context]
-
             callback(avIds)
-
         else:
             self.notify.warning("Unexpected completion from barrier %s" % (context))
 

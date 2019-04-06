@@ -1,41 +1,47 @@
 """ClientRepository module: contains the ClientRepository class"""
-from direct.directnotify import DirectNotifyGlobal
-from panda3d.core import UniqueIdAllocator
 
 from .ClientRepositoryBase import ClientRepositoryBase
+from direct.directnotify import DirectNotifyGlobal
 from .MsgTypesCMU import *
 from .PyDatagram import PyDatagram
 from .PyDatagramIterator import PyDatagramIterator
+from panda3d.core import UniqueIdAllocator
 
 
 class ClientRepository(ClientRepositoryBase):
     """
     This is the open-source ClientRepository as provided by CMU.  It
     communicates with the ServerRepository in this same directory.
+
     If you are looking for the VR Studio's implementation of the
     client repository, look to OTPClientRepository (elsewhere).
     """
     notify = DirectNotifyGlobal.directNotify.newCategory("ClientRepository")
+
     # This is required by DoCollectionManager, even though it's not
     # used by this implementation.
     GameGlobalsId = 0
+
     doNotDeallocateChannel = True
 
     def __init__(self, dcFileNames = None, dcSuffix = '', connectMethod = None,
                  threadedNet = None):
-        ClientRepositoryBase.__init__(self, dcFileNames = dcFileNames, dcSuffix = dcSuffix,
-                                      connectMethod = connectMethod, threadedNet = threadedNet)
+        ClientRepositoryBase.__init__(self, dcFileNames = dcFileNames, dcSuffix = dcSuffix, connectMethod = connectMethod, threadedNet = threadedNet)
         self.setHandleDatagramsInternally(False)
+
         base.finalExitCallbacks.append(self.shutdown)
+
         # The doId allocator.  The CMU LAN server may choose to
         # send us a block of doIds.  If it chooses to do so, then we
         # may create objects, using those doIds.
         self.doIdAllocator = None
         self.doIdBase = 0
         self.doIdLast = 0
+
         # The doIdBase of the client message currently being
         # processed.
         self.currentSenderId = None
+
         # Explicitly-requested interest zones.
         self.interestZones = []
 
@@ -43,7 +49,9 @@ class ClientRepository(ClientRepositoryBase):
         self.doIdBase = di.getUint32()
         self.doIdLast = self.doIdBase + di.getUint32()
         self.doIdAllocator = UniqueIdAllocator(self.doIdBase, self.doIdLast - 1)
+
         self.ourChannel = self.doIdBase
+
         self.createReady()
 
     def createReady(self):
@@ -56,8 +64,9 @@ class ClientRepository(ClientRepositoryBase):
         # When new clients join the zone of an object, they need to hear
         # about it, so we send out all of our information about objects in
         # that particular zone.
+
         zone = di.getUint32()
-        for obj in list(self.doId2do.values()):
+        for obj in self.doId2do.values():
             if obj.zoneId == zone:
                 if (self.isLocalId(obj.doId)):
                     self.resendGenerate(obj)
@@ -66,6 +75,7 @@ class ClientRepository(ClientRepositoryBase):
         """ Sends the generate message again for an already-generated
         object, presumably to inform any newly-arrived clients of this
         object's current state. """
+
         # get the list of "ram" fields that aren't
         # required.  These are fields whose values should
         # persist even if they haven't been received
@@ -83,7 +93,9 @@ class ClientRepository(ClientRepositoryBase):
                     # separately through the iteration, so
                     # we can ignore this field itself.
                     continue
+
                 extraFields.append(field.getName())
+
         datagram = self.formatGenerate(obj, extraFields)
         self.send(datagram)
 
@@ -92,19 +104,22 @@ class ClientRepository(ClientRepositoryBase):
         zoneId = di.getUint32()
         classId = di.getUint16()
         doId = di.getUint32()
+
         # Look up the dclass
         dclass = self.dclassesByNumber[classId]
+
         distObj = self.doId2do.get(doId)
         if distObj and distObj.dclass == dclass:
             # We've already got this object.  Probably this is just a
             # repeat-generate, synthesized for the benefit of someone
             # else who just entered the zone.  Accept the new updates,
             # but don't make a formal generate.
-            assert (self.notify.debug("performing generate-update for %s %s" % (dclass.getName(), doId)))
+            assert(self.notify.debug("performing generate-update for %s %s" % (dclass.getName(), doId)))
             dclass.receiveUpdateBroadcastRequired(distObj, di)
             dclass.receiveUpdateOther(distObj, di)
             return
-        assert (self.notify.debug("performing generate for %s %s" % (dclass.getName(), doId)))
+
+        assert(self.notify.debug("performing generate for %s %s" % (dclass.getName(), doId)))
         dclass.startGenerate()
         # Create a new distributed object, and put it in the dictionary
         distObj = self.generateWithRequiredOtherFields(dclass, doId, di, 0, zoneId)
@@ -113,17 +128,20 @@ class ClientRepository(ClientRepositoryBase):
     def allocateDoId(self):
         """ Returns a newly-allocated doId.  Call freeDoId() when the
         object has been deleted. """
+
         return self.doIdAllocator.allocate()
 
     def reserveDoId(self, doId):
         """ Removes the indicate doId from the available pool, as if
         it had been explicitly allocated.  You may pass it to
         freeDoId() later if you wish. """
+
         self.doIdAllocator.initialReserveId(doId)
         return doId
 
     def freeDoId(self, doId):
         """ Returns a doId back into the free pool for re-use. """
+
         assert self.isLocalId(doId)
         self.doIdAllocator.free(doId)
 
@@ -136,6 +154,7 @@ class ClientRepository(ClientRepositoryBase):
     def createDistributedObject(self, className = None, distObj = None,
                                 zoneId = 0, optionalFields = None,
                                 doId = None, reserveDoId = False):
+
         """ To create a DistributedObject, you must pass in either the
         name of the object's class, or an already-created instance of
         the class (or both).  If you pass in just a class name (to the
@@ -149,13 +168,16 @@ class ClientRepository(ClientRepositoryBase):
         on the network or previously passed through
         createDistributedObject.)  In either case, the new
         DistributedObject is returned from this method.
+
         This method will issue the appropriate network commands to
         make this object appear on all of the other clients.
+
         You should supply an initial zoneId in which to manifest the
         object.  The fields marked "required" or "ram" will be
         broadcast to all of the other clients; if you wish to
         broadcast additional field values at this time as well, pass a
         list of field names in the optionalFields parameters.
+
         Normally, doId is None, to mean allocate a new doId for the
         object.  If you wish to use a particular doId, pass it in
         here.  If you also pass reserveDoId = True, this doId will be
@@ -163,14 +185,17 @@ class ClientRepository(ClientRepositoryBase):
         You are responsible for ensuring this doId falls within the
         client's allowable doId range and has not already been
         assigned to another object.  """
+
         if not className:
             if not distObj:
                 self.notify.error("Must specify either a className or a distObj.")
             className = distObj.__class__.__name__
+
         if doId is None:
             doId = self.allocateDoId()
         elif reserveDoId:
             self.reserveDoId(doId)
+
         dclass = self.dclassesByName.get(className)
         if not dclass:
             self.notify.error("Unknown distributed class: %s" % (distObj.__class__))
@@ -178,10 +203,12 @@ class ClientRepository(ClientRepositoryBase):
         if classDef == None:
             self.notify.error("Could not create an undefined %s object." % (
                 dclass.getName()))
+
         if not distObj:
             distObj = classDef(self)
         if not isinstance(distObj, classDef):
             self.notify.error("Object %s is not an instance of %s" % (distObj.__class__.__name__, classDef.__name__))
+
         distObj.dclass = dclass
         distObj.doId = doId
         self.doId2do[doId] = distObj
@@ -219,11 +246,14 @@ class ClientRepository(ClientRepositoryBase):
     def setInterestZones(self, interestZoneIds):
         """ Changes the set of zones that this particular client is
         interested in hearing about. """
+
         datagram = PyDatagram()
         # Add message type
         datagram.addUint16(CLIENT_SET_INTEREST_CMU)
+
         for zoneId in interestZoneIds:
             datagram.addUint32(zoneId)
+
         # send the message
         self.send(datagram)
         self.interestZones = interestZoneIds[:]
@@ -232,6 +262,7 @@ class ClientRepository(ClientRepositoryBase):
         """ Moves the object into the indicated zone. """
         distObj.b_setLocation(0, zoneId)
         assert distObj.zoneId == zoneId
+
         # Tell all of the clients monitoring the new zone that we've
         # arrived.
         self.resendGenerate(distObj)
@@ -257,11 +288,13 @@ class ClientRepository(ClientRepositoryBase):
     def isLocalId(self, doId):
         """ Returns true if this doId is one that we're the owner of,
         false otherwise. """
+
         return ((doId >= self.doIdBase) and (doId < self.doIdLast))
 
     def haveCreateAuthority(self):
         """ Returns true if this client has been assigned a range of
         doId's it may use to create objects, false otherwise. """
+
         return (self.doIdLast > self.doIdBase)
 
     def getAvatarIdFromSender(self):
@@ -274,10 +307,13 @@ class ClientRepository(ClientRepositoryBase):
         if self.notify.getDebug():
             print("ClientRepository received datagram:")
             di.getDatagram().dumpHex(ostream)
+
         msgType = self.getMsgType()
         self.currentSenderId = None
+
         # These are the sort of messages we may expect from the public
         # Panda server.
+
         if msgType == SET_DOID_RANGE_CMU:
             self.handleSetDoIdrange(di)
         elif msgType == OBJECT_GENERATE_CMU:
@@ -292,6 +328,7 @@ class ClientRepository(ClientRepositoryBase):
             self.handleRequestGenerates(di)
         else:
             self.handleMessageType(msgType, di)
+
         # If we're processing a lot of datagrams within one frame, we
         # may forget to send heartbeats.  Keep them coming!
         self.considerHeartbeat()
@@ -310,6 +347,7 @@ class ClientRepository(ClientRepositoryBase):
         # Receives a list of doIds.
         while di.getRemainingSize() > 0:
             doId = di.getUint32()
+
             # We should never get a disable message for our own object.
             assert not self.isLocalId(doId)
             self.disableDoId(doId)
@@ -325,10 +363,12 @@ class ClientRepository(ClientRepositoryBase):
         should normally not be called directly except in the case of
         error recovery, since the server will normally be responsible
         for deleting and disabling objects as they go out of scope.
+
         After this is called, future updates by server on this object
         will be ignored (with a warning message).  The object will
         become valid again the next time the server sends a generate
         message for this doId.
+
         This is not a distributed message and does not delete the
         object on the server or on any other client.
         """
@@ -363,20 +403,25 @@ class ClientRepository(ClientRepositoryBase):
         self.send(dg)
 
     def sendUpdateToChannel(self, distObj, channelId, fieldName, args):
+
         """ Sends a targeted update of a single field to a particular
         client.  The top 32 bits of channelId is ignored; the lower 32
         bits should be the client Id of the recipient (i.e. the
         client's doIdbase).  The field update will be sent to the
         indicated client only.  The field must be marked clsend or
         p2p, and may not be marked broadcast. """
+
         datagram = distObj.dclass.clientFormatUpdate(
             fieldName, distObj.doId, args)
         dgi = PyDatagramIterator(datagram)
+
         # Reformat the packed datagram to change the message type and
         # add the target id.
         dgi.getUint16()
+
         dg = PyDatagram()
         dg.addUint16(CLIENT_OBJECT_UPDATE_FIELD_TARGETED_CMU)
         dg.addUint32(channelId & 0xffffffff)
         dg.appendData(dgi.getRemainingBytes())
+
         self.send(dg)

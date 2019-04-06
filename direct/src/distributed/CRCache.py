@@ -1,13 +1,12 @@
 """CRCache module: contains the CRCache class"""
+
 from direct.directnotify import DirectNotifyGlobal
-
 from . import DistributedObject
-
 
 class CRCache:
     notify = DirectNotifyGlobal.directNotify.newCategory("CRCache")
 
-    def __init__(self, maxCacheItems = 10):
+    def __init__(self, maxCacheItems=10):
         self.maxCacheItems = maxCacheItems
         self.storedCacheItems = maxCacheItems
         self.dict = {}
@@ -29,7 +28,7 @@ class CRCache:
         # track each object that is delayDeleted after it gets its chance to delete,
         # and check them after all objects have had a chance to delete
         delayDeleted = []
-        for distObj in list(self.dict.values()):
+        for distObj in self.dict.values():
             distObj.deleteOrDelay()
             if distObj.getDelayDeleteCount() != 0:
                 delayDeleted.append(distObj)
@@ -66,20 +65,24 @@ class CRCache:
         else:
             # Call disable on the distObj
             distObj.disableAndAnnounce()
+
             # Put the distObj in the fifo and the dict
             self.fifo.append(distObj)
             self.dict[doId] = distObj
+
             success = True
+
             if len(self.fifo) > self.maxCacheItems:
                 # if the cache is full, pop the oldest item
                 oldestDistObj = self.fifo.pop(0)
                 # and remove it from the dictionary
-                del (self.dict[oldestDistObj.getDoId()])
+                del(self.dict[oldestDistObj.getDoId()])
                 # and delete it
                 oldestDistObj.deleteOrDelay()
                 if oldestDistObj.getDelayDeleteCount() <= 0:
                     # make sure we're not leaking
                     oldestDistObj.detectLeaks()
+
         # Make sure that the fifo and the dictionary are sane
         assert len(self.dict) == len(self.fifo)
         return success
@@ -90,7 +93,7 @@ class CRCache:
             # Find the object
             distObj = self.dict[doId]
             # Remove it from the dictionary
-            del (self.dict[doId])
+            del(self.dict[doId])
             # Remove it from the fifo
             self.fifo.remove(distObj)
             # return the distObj
@@ -108,7 +111,7 @@ class CRCache:
         # Look it up
         distObj = self.dict[doId]
         # Remove it from the dict and fifo
-        del (self.dict[doId])
+        del(self.dict[doId])
         self.fifo.remove(distObj)
         # and delete it
         distObj.deleteOrDelay()
@@ -120,7 +123,7 @@ class CRCache:
         # For debugging; this verifies that the cache is sensible and
         # returns true if so.
         from panda3d.core import NodePath
-        for obj in list(self.dict.values()):
+        for obj in self.dict.values():
             if isinstance(obj, NodePath):
                 assert not obj.isEmpty() and obj.getTopNode() != render.node()
         return 1

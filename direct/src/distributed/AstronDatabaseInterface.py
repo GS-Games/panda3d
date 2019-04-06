@@ -1,11 +1,9 @@
-from panda3d.core import *
-from panda3d.direct import *
-from .MsgTypes import *
+from pandac.PandaModules import *
+from MsgTypes import *
 from direct.directnotify import DirectNotifyGlobal
-from .ConnectionRepository import ConnectionRepository
-from .PyDatagram import PyDatagram
-from .PyDatagramIterator import PyDatagramIterator
-
+from ConnectionRepository import ConnectionRepository
+from PyDatagram import PyDatagram
+from PyDatagramIterator import PyDatagramIterator
 
 class AstronDatabaseInterface:
     """
@@ -59,7 +57,7 @@ class AstronDatabaseInterface:
         dg.addUint32(ctx)
         dg.addUint16(dclass.getNumber())
         dg.addUint16(fieldCount)
-        dg.appendData(fieldPacker.getBytes())
+        dg.appendData(fieldPacker.getString())
         self.air.send(dg)
 
     def handleCreateObjectResp(self, di):
@@ -139,6 +137,7 @@ class AstronDatabaseInterface:
                 dclass = self.air.dclassesByNumber.get(dclassId)
             else:
                 dclass = self._dclasses[ctx]
+
             if not dclass:
                 self.notify.error('Received bad dclass %d in'
                                   ' DBSERVER_OBJECT_GET_ALL_RESP' % (dclassId))
@@ -148,11 +147,9 @@ class AstronDatabaseInterface:
             else:
                 fieldCount = di.getUint16()
             unpacker = DCPacker()
-            
             unpacker.setUnpackData(di.getRemainingBytes())
             fields = {}
-            for x in range(fieldCount):
-            
+            for x in xrange(fieldCount):
                 fieldId = unpacker.rawUnpackInt16()
                 field = dclass.getFieldByIndex(fieldId)
 
@@ -242,7 +239,7 @@ class AstronDatabaseInterface:
         dg.addUint32(doId)
         if fieldCount != 1:
             dg.addUint16(fieldCount)
-        dg.appendData(fieldPacker.getBytes())
+        dg.appendData(fieldPacker.getString())
         self.air.send(dg)
 
         if oldFields is None and callback is not None:
@@ -279,7 +276,7 @@ class AstronDatabaseInterface:
             unpacker = DCPacker()
             unpacker.setUnpackData(di.getRemainingBytes())
             fields = {}
-            for x in range(fieldCount):
+            for x in xrange(fieldCount):
                 fieldId = unpacker.rawUnpackInt16()
                 field = self.air.getDcFile().getFieldByIndex(fieldId)
 

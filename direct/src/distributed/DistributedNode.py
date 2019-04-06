@@ -1,8 +1,8 @@
 """DistributedNode module: contains the DistributedNode class"""
 
 from panda3d.core import NodePath
-
-from . import GridParent, DistributedObject
+from . import GridParent
+from . import DistributedObject
 
 
 class DistributedNode(DistributedObject.DistributedObject, NodePath):
@@ -11,14 +11,10 @@ class DistributedNode(DistributedObject.DistributedObject, NodePath):
     def __init__(self, cr):
         try:
             self.DistributedNode_initialized
-
         except:
             self.DistributedNode_initialized = 1
-
             self.gotStringParentToken = 0
-
             DistributedObject.DistributedObject.__init__(self, cr)
-
             if not self.this:
                 NodePath.__init__(self, "DistributedNode")
 
@@ -29,55 +25,42 @@ class DistributedNode(DistributedObject.DistributedObject, NodePath):
         if self.activeState != DistributedObject.ESDisabled:
             if not self.isEmpty():
                 self.reparentTo(hidden)
-
             DistributedObject.DistributedObject.disable(self)
 
     def delete(self):
         try:
             self.DistributedNode_deleted
-
         except:
             self.DistributedNode_deleted = 1
-
             if not self.isEmpty():
                 self.removeNode()
-
             if self.gridParent:
                 self.gridParent.delete()
-
             DistributedObject.DistributedObject.delete(self)
 
     def generate(self):
         DistributedObject.DistributedObject.generate(self)
-
         self.gotStringParentToken = 0
 
-    def setLocation(self, parentId, zoneId, teleport = 0):
+    def setLocation(self, parentId, zoneId, teleport=0):
         # Redefine DistributedObject setLocation, so that when
         # location is set to the ocean grid, we can update our parenting
         # under gridParent
         DistributedObject.DistributedObject.setLocation(self, parentId, zoneId)
-
         parentObj = self.cr.doId2do.get(parentId)
-
         if parentObj:
             # Make sure you in a zone that is in the grid before making a GridParent
             if (parentObj.isGridParent() and (zoneId >= parentObj.startingZone)):
                 if not self.gridParent:
                     self.gridParent = GridParent.GridParent(self)
-
                 self.gridParent.setGridParent(parentObj, zoneId, teleport)
-
             else:
                 if self.gridParent:
                     self.gridParent.delete()
-
                     self.gridParent = None
-
         else:
             if self.gridParent:
                 self.gridParent.delete()
-
                 self.gridParent = None
 
     def __cmp__(self, other):
@@ -89,71 +72,56 @@ class DistributedNode(DistributedObject.DistributedObject, NodePath):
         # pointerwise.
         if self is other:
             return 0
-
         else:
             return 1
 
     ### setParent ###
+
     def b_setParent(self, parentToken):
         if type(parentToken) == str:
             self.setParentStr(parentToken)
-
         else:
             self.setParent(parentToken)
-
         # it's important to call the local setParent first.
         self.d_setParent(parentToken)
 
     def d_setParent(self, parentToken):
         if type(parentToken) == str:
             self.sendUpdate("setParentStr", [parentToken])
-
         else:
             self.sendUpdate("setParent", [parentToken])
 
     def setParentStr(self, parentTokenStr):
         assert self.notify.debug('setParentStr: %s' % parentTokenStr)
-
         assert self.notify.debug('isGenerated: %s' % self.isGenerated())
-
         if len(parentTokenStr) > 0:
             self.do_setParent(parentTokenStr)
-
             self.gotStringParentToken = 1
 
     def setParent(self, parentToken):
         assert self.notify.debug('setParent: %s' % parentToken)
-
         assert self.notify.debug('isGenerated: %s' % self.isGenerated())
-
         # if we are not yet generated and we just got a parent token
         # as a string, ignore whatever value comes in here
         justGotRequiredParentAsStr = ((not self.isGenerated()) and
                                       self.gotStringParentToken)
-
         if not justGotRequiredParentAsStr:
             if parentToken != 0:
                 self.do_setParent(parentToken)
-
         self.gotStringParentToken = 0
 
     def do_setParent(self, parentToken):
         """do_setParent(self, int parentToken)
 
-
-
         This function is defined simply to allow a derived class (like
-
         DistributedAvatar) to override the behavior of setParent if
-
         desired.
-
         """
-
         if not self.isDisabled():
             self.cr.parentMgr.requestReparent(self, parentToken)
 
     ###### set pos and hpr functions #######
+
     # setX provided by NodePath
     def d_setX(self, x):
         self.sendUpdate("setX", [x])
@@ -180,17 +148,13 @@ class DistributedNode(DistributedObject.DistributedObject, NodePath):
 
     def setXY(self, x, y):
         self.setX(x)
-
         self.setY(y)
-
     def d_setXY(self, x, y):
         self.sendUpdate("setXY", [x, y])
 
     def setXZ(self, x, z):
         self.setX(x)
-
         self.setZ(z)
-
     def d_setXZ(self, x, z):
         self.sendUpdate("setXZ", [x, z])
 
@@ -204,19 +168,14 @@ class DistributedNode(DistributedObject.DistributedObject, NodePath):
 
     def setXYH(self, x, y, h):
         self.setX(x)
-
         self.setY(y)
-
         self.setH(h)
-
     def d_setXYH(self, x, y, h):
         self.sendUpdate("setXYH", [x, y, h])
 
     def setXYZH(self, x, y, z, h):
         self.setPos(x, y, z)
-
         self.setH(h)
-
     def d_setXYZH(self, x, y, z, h):
         self.sendUpdate("setXYZH", [x, y, z, h])
 

@@ -1,10 +1,9 @@
+from direct.showbase.DirectObject import *
 from pandac.PandaModules import *
-
-from direct.distributed import DistributedObject
-from direct.distributed.ClockDelta import globalClockDelta
 from direct.task import Task
-from pandac.PandaModules import *
-
+from direct.distributed import DistributedObject
+from direct.directnotify import DirectNotifyGlobal
+from direct.distributed.ClockDelta import globalClockDelta
 
 class TimeManager(DistributedObject.DistributedObject):
     """
@@ -50,22 +49,18 @@ class TimeManager(DistributedObject.DistributedObject):
         DistributedObject.DistributedObject.__init__(self, cr)
 
         self.thisContext = -1
-
         self.nextContext = 0
-
         self.attemptCount = 0
-
         self.start = 0
-
-        self.lastAttempt = -self.minWait * 2
+        self.lastAttempt = -self.minWait*2
 
     ### DistributedObject methods ###
+
     def generate(self):
         """
         This method is called when the DistributedObject is reintroduced
         to the world, either for the first time or from the cache.
         """
-
         DistributedObject.DistributedObject.generate(self)
 
         self.accept('clock_error', self.handleClockError)
@@ -75,9 +70,7 @@ class TimeManager(DistributedObject.DistributedObject):
 
     def announceGenerate(self):
         DistributedObject.DistributedObject.announceGenerate(self)
-
         self.cr.timeManager = self
-
         self.synchronize("TimeManager.announceGenerate")
 
     def disable(self):
@@ -85,16 +78,11 @@ class TimeManager(DistributedObject.DistributedObject):
         This method is called when the DistributedObject is removed from
         active duty and stored in a cache.
         """
-
         self.ignore('clock_error')
-
         self.stopTask()
-
         taskMgr.remove('frameRateMonitor')
-
         if self.cr.timeManager is self:
             self.cr.timeManager = None
-
         DistributedObject.DistributedObject.disable(self)
 
     def delete(self):
@@ -102,13 +90,12 @@ class TimeManager(DistributedObject.DistributedObject):
         This method is called when the DistributedObject is permanently
         removed from the world and deleted from the cache.
         """
-
         DistributedObject.DistributedObject.delete(self)
 
     ### Task management methods ###
+
     def startTask(self):
         self.stopTask()
-
         taskMgr.doMethodLater(self.updateFreq, self.doUpdate, "timeMgrTask")
 
     def stopTask(self):
@@ -116,20 +103,19 @@ class TimeManager(DistributedObject.DistributedObject):
 
     def doUpdate(self, task):
         self.synchronize("timer")
-
         # Spawn the next one
         taskMgr.doMethodLater(self.updateFreq, self.doUpdate, "timeMgrTask")
-
         return Task.done
 
     ### Automatic clock error handling ###
+
     def handleClockError(self):
         self.synchronize("clock error")
 
     ### Synchronization methods ###
+
     def synchronize(self, description):
         """synchronize(self, string description)
-
 
         Call this function from time to time to synchronize watches
         with the server.  This initiates a round-trip transaction;
@@ -145,61 +131,43 @@ class TimeManager(DistributedObject.DistributedObject):
 
         if now - self.lastAttempt < self.minWait:
             self.notify.debug("Not resyncing (too soon): %s" % (description))
-
             return 0
 
         self.talkResult = 0
-
         self.thisContext = self.nextContext
-
         self.attemptCount = 0
-
         self.nextContext = (self.nextContext + 1) & 255
-
         self.notify.info("Clock sync: %s" % (description))
-
         self.start = now
-
         self.lastAttempt = now
-
         self.sendUpdate("requestServerTime", [self.thisContext])
 
         return 1
 
+
     def serverTime(self, context, timestamp):
         """serverTime(self, int8 context, int32 timestamp)
 
-
-
         This message is sent from the AI to the client in response to
-
         a previous requestServerTime.  It contains the time as
-
         observed by the AI.
-
-
 
         The client should use this, in conjunction with the time
         measurement taken before calling requestServerTime (above), to
         determine the clock delta between the AI and the client
         machines.
         """
-
         end = globalClock.getRealTime()
 
         if context != self.thisContext:
             self.notify.info("Ignoring TimeManager response for old context %d" % (context))
-
             return
 
         elapsed = end - self.start
-
         self.attemptCount += 1
-
         self.notify.info("Clock sync roundtrip took %0.3f ms" % (elapsed * 1000.0))
 
         average = (self.start + end) / 2.0 - self.extraSkew
-
         uncertainty = (end - self.start) / 2.0 + abs(self.extraSkew)
 
         globalClockDelta.resynchronize(average, timestamp, uncertainty)
@@ -209,15 +177,11 @@ class TimeManager(DistributedObject.DistributedObject):
         if globalClockDelta.getUncertainty() > self.maxUncertainty:
             if self.attemptCount < self.maxAttempts:
                 self.notify.info("Uncertainty is too high, trying again.")
-
                 self.start = globalClock.getRealTime()
-
                 self.sendUpdate("requestServerTime", [self.thisContext])
-
                 return
-
             self.notify.info("Giving up on uncertainty requirement.")
 
         messenger.send("gotTimeSync", taskChain = 'default')
-
         messenger.send(self.cr.uniqueName("gotTimeSync"), taskChain = 'default')
+
